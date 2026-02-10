@@ -125,9 +125,10 @@ export class MusicManager {
                 (message.channel as any).send(`✅ Added to queue: **${songInfo.title}**`);
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            message.reply('❌ An error occurred while trying to play music.');
+            const errorMessage = error.message || 'Unknown error';
+            message.reply(`❌ **Playback Error:** \`${errorMessage}\`\n*Make sure the bot has "Connect" and "Speak" permissions!*`);
         }
     }
 
@@ -154,7 +155,15 @@ export class MusicManager {
                 queue.songs.shift();
                 this.playNext(guildId);
             });
-        } catch (error) {
+
+            queue.player.on('error', error => {
+                console.error(`Error in player: ${error.message}`);
+                queue.playing = false;
+                queue.songs.shift();
+                this.playNext(guildId);
+            });
+
+        } catch (error: any) {
             console.error(error);
             queue.songs.shift();
             this.playNext(guildId);
