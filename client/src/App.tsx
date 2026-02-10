@@ -34,14 +34,19 @@ const StatCard = ({ title, value, icon: Icon, color }: any) => (
     </div>
 );
 
-const CommandToggle = ({ name, description, active }: any) => (
+const CommandToggle = ({ name, description, active, onToggle }: any) => (
     <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-transparent hover:border-white/10 transition-colors">
         <div>
             <div className="text-white font-semibold">{name}</div>
             <div className="text-white/40 text-sm">{description}</div>
         </div>
         <label className="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" className="sr-only peer" defaultChecked={active} />
+            <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={active}
+                onChange={(e) => onToggle(e.target.checked)}
+            />
             <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
         </label>
     </div>
@@ -50,7 +55,8 @@ const CommandToggle = ({ name, description, active }: any) => (
 export default function App() {
     const [activeTab, setActiveTab] = useState('overview');
     const [stats, setStats] = useState({ uptime: 0, guilds: 0, users: 0, commandsRun: 0 });
-    const [config, setConfig] = useState({ prefix: ',', error_logging: true, status_message: '' });
+    const [config, setConfig] = useState<any>({ prefix: ',', error_logging: true, status_message: '', features: {} });
+    const [logs, setLogs] = useState<any[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -62,6 +68,10 @@ export default function App() {
                 const configRes = await fetch('/api/config');
                 const configData = await configRes.json();
                 setConfig(configData);
+
+                const logsRes = await fetch('/api/logs');
+                const logsData = await logsRes.json();
+                setLogs(logsData);
             } catch (err) {
                 console.error('Failed to fetch data', err);
             }
@@ -78,6 +88,13 @@ export default function App() {
         return `${h}h ${m}m`;
     };
 
+    const formatTimeAgo = (timestamp: string) => {
+        const diff = Date.now() - new Date(timestamp).getTime();
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 1) return 'Just now';
+        return `${minutes}m ago`;
+    };
+
     const handleUpdateConfig = async (key: string, value: any) => {
         try {
             await fetch('/api/config', {
@@ -88,7 +105,7 @@ export default function App() {
                 },
                 body: JSON.stringify({ key, value })
             });
-            setConfig(prev => ({ ...prev, [key]: value }));
+            setConfig((prev: any) => ({ ...prev, [key]: value }));
         } catch (err) {
             console.error('Update failed', err);
         }
@@ -195,17 +212,19 @@ export default function App() {
                                     <Activity size={22} className="text-primary" /> System Logs
                                 </h2>
                                 <div className="space-y-4">
-                                    {[1, 2, 3].map((i) => (
-                                        <div key={i} className="flex gap-4 items-start p-4 hover:bg-white/5 rounded-2xl transition-all cursor-default group">
+                                    {logs.length > 0 ? logs.map((log) => (
+                                        <div key={log.id} className="flex gap-4 items-start p-4 hover:bg-white/5 rounded-2xl transition-all cursor-default group">
                                             <div className="bg-white/10 p-2 rounded-lg group-hover:bg-primary/20 transition-all">
-                                                <Terminal size={16} className="text-white/40 group-hover:text-primary transition-all" />
+                                                <Terminal size={16} className={cn("transition-all", log.success ? "text-primary" : "text-red-400")} />
                                             </div>
                                             <div>
-                                                <div className="text-sm font-medium text-white/60 italic">{i * 2} minutes ago</div>
-                                                <div className="text-white font-semibold">User @ZedoxAdmin executed <span className="text-primary">,prefix</span></div>
+                                                <div className="text-sm font-medium text-white/60 italic">{formatTimeAgo(log.timestamp)}</div>
+                                                <div className="text-white font-semibold">User <span className="text-white/40">@{log.user_tag}</span> executed <span className="text-primary">{config.prefix}{log.command}</span></div>
                                             </div>
                                         </div>
-                                    ))}
+                                    )) : (
+                                        <div className="p-8 text-center text-white/20 font-medium">No logs available yet</div>
+                                    )}
                                 </div>
                             </section>
 
@@ -272,21 +291,71 @@ export default function App() {
 
                 {activeTab === 'commands' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <CommandToggle name="Moderation Pack" description="Kick, Ban, Mute commands" active={true} />
-                        <CommandToggle name="Auto-Mod" description="Automatic spam protection" active={true} />
-                        <CommandToggle name="Economy System" description="Enable server coins and shop" active={false} />
-                        <CommandToggle name="Music Player" description="High quality audio streaming" active={true} />
+                        <CommandToggle
+                            name="Moderation Pack"
+                            description="Kick, Ban, Mute commands"
+                            active={config.features?.moderation}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.moderation', v)}
+                        />
+                        <CommandToggle
+                            name="Auto-Mod"
+                            description="Automatic spam protection"
+                            active={config.features?.automod}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.automod', v)}
+                        />
+                        <CommandToggle
+                            name="Economy System"
+                            description="Enable server coins and shop"
+                            active={config.features?.economy}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.economy', v)}
+                        />
+                        <CommandToggle
+                            name="Music Player"
+                            description="High quality audio streaming"
+                            active={config.features?.music}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.music', v)}
+                        />
                     </div>
                 )}
 
                 {activeTab === 'moderation' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <CommandToggle name="Clear Command" description="Allows moderators to bulk delete messages" active={true} />
-                        <CommandToggle name="Mute Control" description="Timed mute and timeout functionality" active={true} />
-                        <CommandToggle name="Lockdown Mode" description="Emergency channel locking" active={false} />
-                        <CommandToggle name="Invite Generator" description="Generate bot invite links" active={true} />
-                        <CommandToggle name="Ping Command" description="Check bot latency and API status" active={true} />
-                        <CommandToggle name="Info Boards" description="Server and user info embeds" active={true} />
+                        <CommandToggle
+                            name="Clear Command"
+                            description="Allows moderators to bulk delete messages"
+                            active={config.features?.clear}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.clear', v)}
+                        />
+                        <CommandToggle
+                            name="Mute Control"
+                            description="Timed mute and timeout functionality"
+                            active={config.features?.mute}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.mute', v)}
+                        />
+                        <CommandToggle
+                            name="Lockdown Mode"
+                            description="Emergency channel locking"
+                            active={config.features?.lockdown}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.lockdown', v)}
+                        />
+                        <CommandToggle
+                            name="Invite Generator"
+                            description="Generate bot invite links"
+                            active={config.features?.invite}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.invite', v)}
+                        />
+                        <CommandToggle
+                            name="Ping Command"
+                            description="Check bot latency and API status"
+                            active={config.features?.ping}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.ping', v)}
+                        />
+                        <CommandToggle
+                            name="Info Boards"
+                            description="Server and user info embeds"
+                            active={config.features?.info}
+                            onToggle={(v: boolean) => handleUpdateConfig('features.info', v)}
+                        />
                     </div>
                 )}
             </main>

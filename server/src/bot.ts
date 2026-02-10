@@ -34,10 +34,31 @@ client.once('ready', () => {
     }, 60000);
 });
 
+const messageLog = new Map<string, number[]>();
+
 client.on('messageCreate', async (message: Message) => {
     if (message.author.bot || !message.guild) return;
 
     const config = db_manager.getConfig();
+
+    // Auto-Mod: Anti-Spam
+    if (config.features?.automod) {
+        const now = Date.now();
+        const timestamps = messageLog.get(message.author.id) || [];
+        timestamps.push(now);
+
+        // Keep only last 5 seconds
+        const recentTimestamps = timestamps.filter(t => now - t < 5000);
+        messageLog.set(message.author.id, recentTimestamps);
+
+        if (recentTimestamps.length > 5) {
+            await message.delete().catch(() => { });
+            return (message.channel as any).send(`⚠️ **Auto-Mod:** ${message.author}, please slow down!`).then((msg: any) => {
+                setTimeout(() => msg.delete().catch(() => { }), 3000);
+            });
+        }
+    }
+
     const prefix = config.prefix || ',';
 
     if (!message.content.startsWith(prefix)) return;
@@ -81,6 +102,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'kick':
+                if (!config.features?.moderation) return message.reply('❌ The **Moderation Pack** is currently disabled in the dashboard.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.KickMembers)) return message.reply('❌ Insufficient permissions.');
                 const kickMember = message.mentions.members?.first();
                 if (!kickMember) return message.reply('❌ Please mention a user to kick.');
@@ -89,6 +111,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'ban':
+                if (!config.features?.moderation) return message.reply('❌ The **Moderation Pack** is currently disabled in the dashboard.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.BanMembers)) return message.reply('❌ Insufficient permissions.');
                 const banMember = message.mentions.members?.first();
                 if (!banMember) return message.reply('❌ Please mention a user to ban.');
@@ -97,6 +120,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'clear':
+                if (!config.features?.clear) return message.reply('❌ The **Clear Command** is currently disabled.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply('❌ Insufficient permissions.');
                 const amount = parseInt(args[0]);
                 if (isNaN(amount) || amount < 1 || amount > 100) return message.reply('❌ Provide a number between 1 and 100.');
@@ -107,6 +131,7 @@ client.on('messageCreate', async (message: Message) => {
 
             case 'mute':
             case 'textmute':
+                if (!config.features?.mute) return message.reply('❌ **Mute Control** is currently disabled.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return message.reply('❌ Insufficient permissions.');
                 const muteUser = message.mentions.members?.first();
                 const durationStr = args[1];
@@ -126,6 +151,7 @@ client.on('messageCreate', async (message: Message) => {
 
             case 'unmute':
             case 'textunmute':
+                if (!config.features?.mute) return message.reply('❌ **Mute Control** is currently disabled.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return message.reply('❌ Insufficient permissions.');
                 const unmuteUser = message.mentions.members?.first();
                 if (!unmuteUser) return message.reply('❌ Mention a user.');
@@ -135,6 +161,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'deafen':
+                if (!config.features?.moderation) return message.reply('❌ The **Moderation Pack** is currently disabled.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.DeafenMembers)) return message.reply('❌ Insufficient permissions.');
                 const deafMember = message.mentions.members?.first();
                 if (!deafMember || !deafMember.voice.channel) return message.reply('❌ User not in voice.');
@@ -143,6 +170,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'undeafen':
+                if (!config.features?.moderation) return message.reply('❌ The **Moderation Pack** is currently disabled.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.DeafenMembers)) return message.reply('❌ Insufficient permissions.');
                 const undeafMember = message.mentions.members?.first();
                 if (!undeafMember || !undeafMember.voice.channel) return message.reply('❌ User not in voice.');
@@ -151,6 +179,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'lockdown':
+                if (!config.features?.lockdown) return message.reply('❌ **Lockdown Mode** is currently disabled.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ Insufficient permissions.');
                 await (message.channel as any).permissionOverwrites.edit(message.guild.roles.everyone, {
                     SendMessages: false
@@ -159,6 +188,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'unlock':
+                if (!config.features?.lockdown) return message.reply('❌ **Lockdown Mode** is currently disabled.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ Insufficient permissions.');
                 await (message.channel as any).permissionOverwrites.edit(message.guild.roles.everyone, {
                     SendMessages: true
@@ -167,6 +197,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'debug':
+                if (!config.features?.info) return;
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.Administrator)) return;
                 const uptime = process.uptime();
                 await message.reply(`⚙️ **Debug Info:**\nUptime: ${Math.floor(uptime / 60)}m\nGuilds: ${client.guilds.cache.size}\nLat: ${client.ws.ping}ms`);
@@ -181,10 +212,12 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'ping':
+                if (!config.features?.ping) return message.reply('❌ **Ping Command** is currently disabled.');
                 await message.reply(`🏓 Pong! Latency is ${Date.now() - message.createdTimestamp}ms. API Latency is ${Math.round(client.ws.ping)}ms.`);
                 break;
 
             case 'help':
+                // Help should probably always work or check a flag
                 const helpEmbed = new EmbedBuilder()
                     .setTitle('Zedox Bot Commands')
                     .setColor('#5865F2')
@@ -198,6 +231,7 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'uptime':
+                if (!config.features?.info) return message.reply('❌ **Info Commands** are currently disabled.');
                 const ut = process.uptime();
                 const days = Math.floor(ut / 86400);
                 const hours = Math.floor(ut / 3600) % 24;
@@ -206,11 +240,17 @@ client.on('messageCreate', async (message: Message) => {
                 break;
 
             case 'slowmode':
+                if (!config.features?.moderation) return message.reply('❌ The **Moderation Pack** is currently disabled.');
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ Insufficient permissions.');
                 const smAmount = parseInt(args[0]);
                 if (isNaN(smAmount)) return message.reply('❌ Provide a number in seconds.');
                 await (message.channel as any).setRateLimitPerUser(smAmount);
                 await message.reply(`✅ Slowmode set to ${smAmount}s.`);
+                break;
+
+            case 'invite':
+                if (!config.features?.invite) return message.reply('❌ **Invite Generator** is currently disabled.');
+                await message.reply('🔗 **Invite Zedox:** https://discord.com/oauth2/authorize?client_id=YOUR_ID&permissions=8&scope=bot%20applications.commands');
                 break;
 
             default:

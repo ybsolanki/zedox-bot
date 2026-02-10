@@ -30,13 +30,18 @@ const authMiddleware = (req: express.Request, res: express.Response, next: expre
 import { client } from './bot.js';
 
 app.get('/api/stats', (req, res) => {
+    const data = db_manager.getLogs(1000); // Get all for count, or optimize later
     const stats = {
         uptime: process.uptime(),
         guilds: client.guilds.cache.size,
         users: client.users.cache.size,
-        commandsRun: 0,
+        commandsRun: data.length,
     };
     res.json(stats);
+});
+
+app.get('/api/logs', (req, res) => {
+    res.json(db_manager.getLogs(10));
 });
 
 app.get('/api/config', (req, res) => {

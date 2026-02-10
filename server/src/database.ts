@@ -18,6 +18,18 @@ interface DBData {
     error_logging: boolean;
     dm_permissions: boolean;
     status_message: string;
+    features: {
+      moderation: boolean;
+      automod: boolean;
+      economy: boolean;
+      music: boolean;
+      clear: boolean;
+      mute: boolean;
+      lockdown: boolean;
+      invite: boolean;
+      ping: boolean;
+      info: boolean;
+    };
   };
   command_logs: any[];
   mutes: any[];
@@ -28,7 +40,19 @@ const defaultData: DBData = {
     prefix: ',',
     error_logging: true,
     dm_permissions: true,
-    status_message: 'Watching over the server'
+    status_message: 'Watching over the server',
+    features: {
+      moderation: true,
+      automod: true,
+      economy: false,
+      music: false,
+      clear: true,
+      mute: true,
+      lockdown: false,
+      invite: true,
+      ping: true,
+      info: true
+    }
   },
   command_logs: [],
   mutes: []
@@ -50,7 +74,12 @@ export const db_manager = {
   getConfig: () => readDB().config,
   updateConfig: (key: string, value: any) => {
     const data = readDB();
-    (data.config as any)[key] = value;
+    if (key.startsWith('features.')) {
+      const featureKey = key.split('.')[1];
+      (data.config.features as any)[featureKey] = value;
+    } else {
+      (data.config as any)[key] = value;
+    }
     writeDB(data);
   },
   logCommand: (id: string, command: string, user: string, guild: string, success: boolean) => {
@@ -72,5 +101,9 @@ export const db_manager = {
     const data = readDB();
     data.mutes = data.mutes.filter(m => m.user_id !== userId);
     writeDB(data);
+  },
+  getLogs: (limit = 10) => {
+    const data = readDB();
+    return data.command_logs.slice(-limit).reverse();
   }
 };
