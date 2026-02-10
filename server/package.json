@@ -4,7 +4,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "concurrently \"npx cross-env NODE_OPTIONS=--loader=ts-node/esm ts-node src/bot.ts\" \"npx cross-env NODE_OPTIONS=--loader=ts-node/esm ts-node src/api.ts\"",
+        "dev": "cross-env NODE_OPTIONS=--loader=ts-node/esm ts-node src/api.ts",
         "start": "node dist/api.js",
         "build": "tsc"
     },

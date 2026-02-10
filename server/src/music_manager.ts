@@ -72,33 +72,51 @@ export class MusicManager {
         const queue = this.getOrCreateQueue(guildId);
 
         try {
-            (message.channel as any).send(`🔍 Searching for \`${query}\`...`);
+            console.log(`[Music] Request: "${query}" in guild ${guildId}`);
 
             let songInfo: Song;
 
-            // Comprehensive validation using play-dl
-            const validation = await play.validate(query);
-            console.log(`Validation result for "${query}": ${validation}`);
+            // Comprehensive validation using play-dl (safe check)
+            let validation: any = false;
+            try {
+                validation = await play.validate(query);
+            } catch (e) {
+                validation = 'search';
+            }
 
             if (validation && validation !== 'search') {
                 if (validation.includes('yt')) {
-                    const info = await play.video_info(query);
-                    songInfo = {
-                        title: info.video_details.title || 'Unknown YouTube Track',
-                        url: info.video_details.url,
-                        duration: info.video_details.durationRaw,
-                        thumbnail: info.video_details.thumbnails[0].url
-                    };
+                    try {
+                        const info = await play.video_info(query);
+                        songInfo = {
+                            title: info.video_details.title || 'YouTube Track',
+                            url: info.video_details.url,
+                            duration: info.video_details.durationRaw,
+                            thumbnail: info.video_details.thumbnails[0].url
+                        };
+                    } catch (err: any) {
+                        // Fallback to search if link fails (common for bot detection errors)
+                        console.warn(`[Music] Link info failed, falling back to search: ${err.message}`);
+                        const searchResult = await play.search(query, { limit: 1, source: { youtube: 'video' } });
+                        if (searchResult.length === 0) throw new Error('Could not play this link. Try searching for the song name!');
+                        songInfo = {
+                            title: searchResult[0].title || 'Unknown',
+                            url: searchResult[0].url,
+                            duration: searchResult[0].durationRaw,
+                            thumbnail: searchResult[0].thumbnails[0].url
+                        };
+                    }
                 } else if (validation.includes('sp')) {
-                    // play-dl handles guest tokens automatically if constructor called getFreeClientID
                     const spData = await play.spotify(query) as any;
-                    const searchResult = await play.search(`${spData.name} ${spData.artists[0].name}`, { limit: 1, source: { youtube: 'video' } });
+                    const spTitle = spData.name || 'Spotify Track';
+                    const spArtist = spData.artists ? spData.artists[0].name : '';
+                    const searchResult = await play.search(`${spTitle} ${spArtist}`, { limit: 1, source: { youtube: 'video' } });
                     if (searchResult.length === 0) return message.reply('❌ Could not find this Spotify track on streaming platforms.');
                     songInfo = {
-                        title: spData.name,
+                        title: spTitle,
                         url: searchResult[0].url,
                         duration: searchResult[0].durationRaw,
-                        thumbnail: spData.thumbnail?.url || ''
+                        thumbnail: (spData.thumbnail?.url) || (searchResult[0].thumbnails[0].url)
                     };
                 } else if (validation.includes('so')) {
                     const soData = await play.soundcloud(query) as any;
@@ -126,18 +144,27 @@ export class MusicManager {
             queue.songs.push(songInfo);
 
             if (!queue.connection) {
-                console.log(`Joining voice channel: ${voiceChannel.name}`);
+                console.log(`[Music] Connecting to: ${voiceChannel.name} (${voiceChannel.id})`);
                 queue.connection = joinVoiceChannel({
                     channelId: voiceChannel.id,
                     guildId: guildId,
                     adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
                 });
 
-                queue.connection.on(VoiceConnectionStatus.Ready, () => {
-                    console.log(`Connection ready in guild ${guildId}`);
+                // Crucial: Wait for the connection to be ready before playing
+                await new Promise<void>((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error('Voice connection timeout')), 10000);
+                    queue.connection?.once(VoiceConnectionStatus.Ready, () => {
+                        clearTimeout(timeout);
+                        console.log(`[Music] Voice Connection READY in ${guildId}`);
+                        resolve();
+                    });
                 });
 
                 queue.connection.on(VoiceConnectionStatus.Disconnected, () => {
+                    console.log(`[Music] Voice Connection DISCONNECTED in ${guildId}`);
+                    queue.connection?.destroy();
+                    queue.connection = null;
                     this.queues.delete(guildId);
                 });
 
@@ -146,15 +173,15 @@ export class MusicManager {
 
             if (queue.songs.length === 1 && !queue.playing) {
                 await this.playNext(guildId);
-                (message.channel as any).send(`🎶 Now playing: **${songInfo.title}**`);
+                (message.channel as any).send(`🎶 Now playing: **${songInfo.title}** (Requested by: **${message.author.username}**)`);
             } else {
                 (message.channel as any).send(`✅ Added to queue: **${songInfo.title}**`);
             }
 
         } catch (error: any) {
-            console.error('PLAY ERROR:', error);
+            console.error('[Music] Global Play Error:', error);
             const errorMessage = error.message || 'Unknown error';
-            message.reply(`❌ **Playback Error:** \`${errorMessage}\` \n*Hint: Check if the link is correct or try searching by name!*`);
+            message.reply(`❌ **Playback Error:** \`${errorMessage}\` \n*Try searching by song name (e.g. ,play ${query.slice(0, 10)})*`);
         }
     }
 
@@ -168,7 +195,14 @@ export class MusicManager {
 
         const song = queue.songs[0];
         try {
-            const stream = await play.stream(song.url);
+            console.log(`[Music] Attempting to stream: ${song.title} (${song.url})`);
+
+            // Adding discordPlayerCompatibility and choosing highest audio quality
+            const stream = await play.stream(song.url, {
+                discordPlayerCompatibility: true,
+                quality: 2 // Highest audio quality
+            });
+
             const resource = createAudioResource(stream.stream, {
                 inputType: stream.type
             });
@@ -177,20 +211,39 @@ export class MusicManager {
             queue.playing = true;
 
             queue.player.once(AudioPlayerStatus.Idle, () => {
-                queue.playing = false;
-                queue.songs.shift();
-                this.playNext(guildId);
+                if (queue.playing) {
+                    console.log(`[Music] Song finished: ${song.title}`);
+                    queue.playing = false;
+                    queue.songs.shift();
+                    this.playNext(guildId);
+                }
             });
 
             queue.player.on('error', error => {
-                console.error(`Error in player: ${error.message}`);
+                console.error(`[Music] Player error for "${song.title}": ${error.message}`);
                 queue.playing = false;
                 queue.songs.shift();
                 this.playNext(guildId);
             });
 
         } catch (error: any) {
-            console.error(error);
+            console.error(`[Music] Streaming failed for "${song.title}": ${error.message}`);
+
+            // Auto-fallback: If the link is blocked, try searching the title instead
+            if (error.message.includes('Sign in') || error.message.includes('403')) {
+                try {
+                    console.log(`[Music] Link blocked. Trying search fallback for: ${song.title}`);
+                    const searchRes = await play.search(song.title, { limit: 1, source: { youtube: 'video' } });
+                    if (searchRes.length > 0 && searchRes[0].url !== song.url) {
+                        song.url = searchRes[0].url; // Update to the non-blocked version
+                        console.log(`[Music] Fallback successful. Retrying with new URL.`);
+                        return this.playNext(guildId);
+                    }
+                } catch (fallbackErr) {
+                    console.error(`[Music] Fallback failed: ${fallbackErr}`);
+                }
+            }
+
             queue.songs.shift();
             this.playNext(guildId);
         }
