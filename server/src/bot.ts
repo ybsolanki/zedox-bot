@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Message, EmbedBuilder, PermissionsBitField, 
 import dotenv from 'dotenv';
 import { db_manager } from './database.js';
 import { v4 as uuidv4 } from 'uuid';
+import { music_manager } from './music_manager.js';
 
 dotenv.config();
 
@@ -224,6 +225,7 @@ client.on('messageCreate', async (message: Message) => {
                     .setDescription(`Current prefix is \`${prefix}\``)
                     .addFields(
                         { name: 'Moderation (11)', value: '`kick`, `ban`, `clear`, `mute`, `unmute`, `deafen`, `undeafen`, `lockdown`, `unlock`, `textmute`, `slowmode`' },
+                        { name: 'Music (4)', value: '`play`, `skip`, `stop`, `queue`' },
                         { name: 'Utility & Info (7)', value: '`userinfo`, `serverinfo`, `invite`, `prefix`, `debug`, `ping`, `uptime`' },
                         { name: 'Other', value: '`help`' }
                     );
@@ -251,6 +253,37 @@ client.on('messageCreate', async (message: Message) => {
             case 'invite':
                 if (!config.features?.invite) return message.reply('❌ **Invite Generator** is currently disabled.');
                 await message.reply('🔗 **Invite Zedox:** https://discord.com/oauth2/authorize?client_id=YOUR_ID&permissions=8&scope=bot%20applications.commands');
+                break;
+
+            case 'p':
+            case 'play':
+                if (!config.features?.music) return message.reply('❌ **Music Player** is currently disabled in the dashboard.');
+                const musicQuery = args.join(' ');
+                if (!musicQuery) return message.reply('❌ Please provide a song name or link.');
+                await music_manager.play(message, musicQuery);
+                break;
+
+            case 'skip':
+            case 's':
+                if (!config.features?.music) return message.reply('❌ **Music Player** is currently disabled.');
+                await message.reply(music_manager.skip(message.guild.id));
+                break;
+
+            case 'stop':
+            case 'leave':
+                if (!config.features?.music) return message.reply('❌ **Music Player** is currently disabled.');
+                await message.reply(music_manager.stop(message.guild.id));
+                break;
+
+            case 'q':
+            case 'queue':
+                if (!config.features?.music) return message.reply('❌ **Music Player** is currently disabled.');
+                const qList = music_manager.getQueue(message.guild.id);
+                const qEmbed = new EmbedBuilder()
+                    .setTitle('🎶 Current Music Queue')
+                    .setDescription(qList)
+                    .setColor('#5865F2');
+                await (message.channel as any).send({ embeds: [qEmbed] });
                 break;
 
             default:
