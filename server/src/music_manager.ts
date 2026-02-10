@@ -34,10 +34,14 @@ export class MusicManager {
     private queues = new Map<string, GuildQueue>();
 
     private constructor() {
-        // play-dl authorization (optional but recommended for Spotify)
-        // play.getFreeClientID().then(id => {
-        //     play.setToken({ spotify: { client_id: id, ... } });
-        // });
+        // Essential for SoundCloud and some Spotify functions
+        play.getFreeClientID().then((clientID) => {
+            play.setToken({
+                soundcloud: {
+                    client_id: clientID
+                }
+            });
+        }).catch(err => console.error('Failed to get SoundCloud client ID:', err));
     }
 
     public static getInstance(): MusicManager {
@@ -92,7 +96,11 @@ export class MusicManager {
                     thumbnail: soData.thumbnail || ''
                 };
             } else {
-                const searchResult = await play.search(query, { limit: 1 });
+                // Force YouTube search to avoid SoundCloud data issues if not initialized
+                const searchResult = await play.search(query, {
+                    limit: 1,
+                    source: { youtube: 'video' }
+                });
                 if (searchResult.length === 0) return message.reply('❌ No results found.');
                 songInfo = {
                     title: searchResult[0].title || 'Unknown',
