@@ -77,17 +77,30 @@ export class MusicManager {
             let songInfo: Song;
 
             // Multi-platform handling with play-dl
-            if (play.sp_validate(query) === 'track') {
-                const spData = await play.spotify(query) as any;
-                const searchResult = await play.search(`${spData.name} ${spData.artists[0].name}`, { limit: 1 });
-                if (searchResult.length === 0) return message.reply('❌ Could not find this Spotify track on streaming platforms.');
+            const validation = await play.validate(query);
+
+            if (validation === 'yt_video' || validation === 'yt_playlist') {
+                const searchResult = await play.search(query, { limit: 1 });
+                if (searchResult.length === 0) return message.reply('❌ Could not find this YouTube track.');
                 songInfo = {
-                    title: spData.name,
+                    title: searchResult[0].title || 'Unknown',
                     url: searchResult[0].url,
                     duration: searchResult[0].durationRaw,
-                    thumbnail: spData.thumbnail?.url || ''
+                    thumbnail: searchResult[0].thumbnails[0].url
                 };
-            } else if (play.so_validate(query)) {
+            } else if (validation === 'sp_track' || validation === 'sp_album' || validation === 'sp_playlist') {
+                const spData = await play.spotify(query) as any;
+                // If it's a playlist or album, just get the first track for now (or handle differently)
+                const targetTrack = spData.tracks ? spData.tracks.page[0] : spData;
+                const searchResult = await play.search(`${targetTrack.name} ${targetTrack.artists[0].name}`, { limit: 1 });
+                if (searchResult.length === 0) return message.reply('❌ Could not find this Spotify track on streaming platforms.');
+                songInfo = {
+                    title: targetTrack.name,
+                    url: searchResult[0].url,
+                    duration: searchResult[0].durationRaw,
+                    thumbnail: targetTrack.thumbnail?.url || ''
+                };
+            } else if (validation === 'so_track' || validation === 'so_playlist') {
                 const soData = await play.soundcloud(query) as any;
                 songInfo = {
                     title: soData.name,
@@ -96,7 +109,7 @@ export class MusicManager {
                     thumbnail: soData.thumbnail || ''
                 };
             } else {
-                // Force YouTube search to avoid SoundCloud data issues if not initialized
+                // Simple search
                 const searchResult = await play.search(query, {
                     limit: 1,
                     source: { youtube: 'video' }
