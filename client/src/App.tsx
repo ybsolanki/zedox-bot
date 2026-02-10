@@ -55,6 +55,9 @@ const CommandToggle = ({ name, description, active, onToggle }: any) => (
 export default function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [token, setToken] = useState(localStorage.getItem('zedox_token') || '');
+    const [loginInput, setLoginInput] = useState('');
+    const [loginError, setLoginError] = useState('');
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
     const [stats, setStats] = useState({ uptime: 0, guilds: 0, users: 0, commandsRun: 0 });
     const [config, setConfig] = useState<any>({ prefix: ',', error_logging: true, status_message: '', features: {} });
@@ -65,39 +68,72 @@ export default function App() {
 
         const fetchData = async () => {
             try {
-                const configRes = await fetch('/api/config');
+                const configRes = await fetch('/api/config', {
+                    headers: { 'Authorization': token }
+                });
+
                 if (configRes.status === 200) {
                     const configData = await configRes.json();
                     setConfig(configData);
                     setIsAuthenticated(true);
+                    setLoginError('');
+                } else if (configRes.status === 401) {
+                    setIsAuthenticated(false);
+                    if (token) setLoginError('Invalid Token! Please check your Render environment variables.');
                 }
 
-                const statsRes = await fetch('/api/stats');
-                const statsData = await statsRes.json();
-                setStats(statsData);
+                const statsRes = await fetch('/api/stats', {
+                    headers: { 'Authorization': token }
+                });
+                if (statsRes.ok) {
+                    const statsData = await statsRes.json();
+                    setStats(statsData);
+                }
 
-                const logsRes = await fetch('/api/logs');
-                const logsData = await logsRes.json();
-                setLogs(logsData);
+                const logsRes = await fetch('/api/logs', {
+                    headers: { 'Authorization': token }
+                });
+                if (logsRes.ok) {
+                    const logsData = await logsRes.json();
+                    setLogs(logsData);
+                }
             } catch (err) {
                 console.error('Failed to fetch data', err);
             }
         };
 
         fetchData();
-        const interval = setInterval(fetchData, 10000); // Update every 10s
+        const interval = setInterval(fetchData, 10000);
         return () => clearInterval(interval);
     }, [token]);
 
-    const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        const inputToken = (e.currentTarget.elements.namedItem('token') as HTMLInputElement).value;
-        setToken(inputToken);
-        localStorage.setItem('zedox_token', inputToken);
+        setIsLoggingIn(true);
+        setLoginError('');
+
+        try {
+            const res = await fetch('/api/config', {
+                headers: { 'Authorization': loginInput }
+            });
+
+            if (res.status === 200) {
+                setToken(loginInput);
+                localStorage.setItem('zedox_token', loginInput);
+                setIsAuthenticated(true);
+            } else {
+                setLoginError('Incorrect Token. Make sure it matches the DASHBOARD_TOKEN on Render.');
+            }
+        } catch (err) {
+            setLoginError('Connection failed. Is the bot server running?');
+        } finally {
+            setIsLoggingIn(false);
+        }
     };
 
     const handleLogout = () => {
         setToken('');
+        setLoginInput('');
         setIsAuthenticated(false);
         localStorage.removeItem('zedox_token');
     };
@@ -164,18 +200,32 @@ export default function App() {
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-white/40 uppercase tracking-widest ml-1">Access Token</label>
                                 <input
-                                    name="token"
                                     type="password"
+                                    value={loginInput}
+                                    onChange={(e) => setLoginInput(e.target.value)}
                                     placeholder="••••••••••••••••"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-primary transition-all placeholder:text-white/10"
+                                    className={cn(
+                                        "w-full bg-white/5 border rounded-xl px-4 py-4 text-white focus:outline-none transition-all placeholder:text-white/10",
+                                        loginError ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-primary"
+                                    )}
                                     required
                                 />
+                                {loginError && (
+                                    <div className="text-red-400 text-xs font-bold mt-2 ml-1 animate-pulse flex items-center gap-1">
+                                        <Activity size={12} /> {loginError}
+                                    </div>
+                                )}
                             </div>
                             <button
                                 type="submit"
-                                className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 group"
+                                disabled={isLoggingIn}
+                                className={cn(
+                                    "w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 group",
+                                    isLoggingIn && "opacity-50 cursor-not-allowed"
+                                )}
                             >
-                                Access Dashboard <Zap size={18} className="group-hover:scale-110 transition-transform" />
+                                {isLoggingIn ? "Authenticating..." : "Access Dashboard"}
+                                {!isLoggingIn && <Zap size={18} className="group-hover:scale-110 transition-transform" />}
                             </button>
                         </form>
                     </div>
