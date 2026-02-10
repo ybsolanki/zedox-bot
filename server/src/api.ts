@@ -3,6 +3,7 @@ import cors from 'cors';
 import { db_manager } from './database.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { client } from './bot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,27 +18,28 @@ app.use(express.json());
 const clientPath = path.join(__dirname, '../../client/dist');
 app.use(express.static(clientPath));
 
-// Auth middleware (simple token for now, expandable to OAuth)
-const authMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const token = req.headers.authorization;
-    if (token === process.env.DASHBOARD_TOKEN || !process.env.DASHBOARD_TOKEN) {
-        next();
-    } else {
-        res.status(401).json({ error: 'Unauthorized' });
+// Auth middleware for /api routes
+app.use('/api', (req, res, next) => {
+    // Public routes (if any)
+    if (req.path === '/stats' || req.path === '/logs') {
+        return next();
     }
-};
 
-import { client } from './bot.js';
+    const auth = req.headers.authorization;
+    if (auth !== process.env.DASHBOARD_TOKEN) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+});
 
 app.get('/api/stats', (req, res) => {
-    const data = db_manager.getLogs(1000); // Get all for count, or optimize later
-    const stats = {
+    const data = db_manager.getLogs(1000);
+    res.json({
         uptime: process.uptime(),
         guilds: client.guilds.cache.size,
         users: client.users.cache.size,
         commandsRun: data.length,
-    };
-    res.json(stats);
+    });
 });
 
 app.get('/api/logs', (req, res) => {
@@ -48,7 +50,7 @@ app.get('/api/config', (req, res) => {
     res.json(db_manager.getConfig());
 });
 
-app.post('/api/config', authMiddleware, (req, res) => {
+app.post('/api/config', (req, res) => {
     const { key, value } = req.body;
     try {
         db_manager.updateConfig(key, value);
@@ -58,7 +60,7 @@ app.post('/api/config', authMiddleware, (req, res) => {
     }
 });
 
-// All other GET requests not handled before will return the React app
+// All other GET requests return the React app
 app.get('*', (req, res) => {
     res.sendFile(path.join(clientPath, 'index.html'));
 });
