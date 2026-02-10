@@ -76,45 +76,45 @@ export class MusicManager {
 
             let songInfo: Song;
 
-            // Multi-platform handling with play-dl
+            // Comprehensive validation using play-dl
             const validation = await play.validate(query);
+            console.log(`Validation result for "${query}": ${validation}`);
 
-            if (validation === 'yt_video' || validation === 'yt_playlist') {
-                const searchResult = await play.search(query, { limit: 1 });
-                if (searchResult.length === 0) return message.reply('❌ Could not find this YouTube track.');
-                songInfo = {
-                    title: searchResult[0].title || 'Unknown',
-                    url: searchResult[0].url,
-                    duration: searchResult[0].durationRaw,
-                    thumbnail: searchResult[0].thumbnails[0].url
-                };
-            } else if (validation === 'sp_track' || validation === 'sp_album' || validation === 'sp_playlist') {
-                const spData = await play.spotify(query) as any;
-                // If it's a playlist or album, just get the first track for now (or handle differently)
-                const targetTrack = spData.tracks ? spData.tracks.page[0] : spData;
-                const searchResult = await play.search(`${targetTrack.name} ${targetTrack.artists[0].name}`, { limit: 1 });
-                if (searchResult.length === 0) return message.reply('❌ Could not find this Spotify track on streaming platforms.');
-                songInfo = {
-                    title: targetTrack.name,
-                    url: searchResult[0].url,
-                    duration: searchResult[0].durationRaw,
-                    thumbnail: targetTrack.thumbnail?.url || ''
-                };
-            } else if (validation === 'so_track' || validation === 'so_playlist') {
-                const soData = await play.soundcloud(query) as any;
-                songInfo = {
-                    title: soData.name,
-                    url: soData.url,
-                    duration: soData.durationRaw || '0:00',
-                    thumbnail: soData.thumbnail || ''
-                };
+            if (validation && validation !== 'search') {
+                if (validation.includes('yt')) {
+                    const info = await play.video_info(query);
+                    songInfo = {
+                        title: info.video_details.title || 'Unknown YouTube Track',
+                        url: info.video_details.url,
+                        duration: info.video_details.durationRaw,
+                        thumbnail: info.video_details.thumbnails[0].url
+                    };
+                } else if (validation.includes('sp')) {
+                    // play-dl handles guest tokens automatically if constructor called getFreeClientID
+                    const spData = await play.spotify(query) as any;
+                    const searchResult = await play.search(`${spData.name} ${spData.artists[0].name}`, { limit: 1, source: { youtube: 'video' } });
+                    if (searchResult.length === 0) return message.reply('❌ Could not find this Spotify track on streaming platforms.');
+                    songInfo = {
+                        title: spData.name,
+                        url: searchResult[0].url,
+                        duration: searchResult[0].durationRaw,
+                        thumbnail: spData.thumbnail?.url || ''
+                    };
+                } else if (validation.includes('so')) {
+                    const soData = await play.soundcloud(query) as any;
+                    songInfo = {
+                        title: soData.name,
+                        url: soData.url,
+                        duration: soData.durationRaw || '0:00',
+                        thumbnail: soData.thumbnail || ''
+                    };
+                } else {
+                    return message.reply(`❌ Link platform \`${validation}\` is not supported yet.`);
+                }
             } else {
-                // Simple search
-                const searchResult = await play.search(query, {
-                    limit: 1,
-                    source: { youtube: 'video' }
-                });
-                if (searchResult.length === 0) return message.reply('❌ No results found.');
+                // Default search (YouTube)
+                const searchResult = await play.search(query, { limit: 1, source: { youtube: 'video' } });
+                if (searchResult.length === 0) return message.reply('❌ No results found on YouTube.');
                 songInfo = {
                     title: searchResult[0].title || 'Unknown',
                     url: searchResult[0].url,
@@ -126,10 +126,15 @@ export class MusicManager {
             queue.songs.push(songInfo);
 
             if (!queue.connection) {
+                console.log(`Joining voice channel: ${voiceChannel.name}`);
                 queue.connection = joinVoiceChannel({
                     channelId: voiceChannel.id,
                     guildId: guildId,
                     adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
+                });
+
+                queue.connection.on(VoiceConnectionStatus.Ready, () => {
+                    console.log(`Connection ready in guild ${guildId}`);
                 });
 
                 queue.connection.on(VoiceConnectionStatus.Disconnected, () => {
@@ -140,16 +145,16 @@ export class MusicManager {
             }
 
             if (queue.songs.length === 1 && !queue.playing) {
-                this.playNext(guildId);
+                await this.playNext(guildId);
                 (message.channel as any).send(`🎶 Now playing: **${songInfo.title}**`);
             } else {
                 (message.channel as any).send(`✅ Added to queue: **${songInfo.title}**`);
             }
 
         } catch (error: any) {
-            console.error(error);
+            console.error('PLAY ERROR:', error);
             const errorMessage = error.message || 'Unknown error';
-            message.reply(`❌ **Playback Error:** \`${errorMessage}\`\n*Make sure the bot has "Connect" and "Speak" permissions!*`);
+            message.reply(`❌ **Playback Error:** \`${errorMessage}\` \n*Hint: Check if the link is correct or try searching by name!*`);
         }
     }
 

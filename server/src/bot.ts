@@ -299,4 +299,11 @@ client.on('messageCreate', async (message: Message) => {
     }
 });
 
-client.login(process.env.DISCORD_BOT_TOKEN);
+export const startBot = () => {
+    client.login(process.env.DISCORD_BOT_TOKEN);
+};
+
+// Check if this file is being run directly
+if (process.argv[1].endsWith('bot.ts') || process.argv[1].endsWith('bot.js')) {
+    startBot();
+}

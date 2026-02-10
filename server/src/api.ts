@@ -3,7 +3,9 @@ import cors from 'cors';
 import { db_manager } from './database.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { client } from './bot.js';
+import { client, startBot } from './bot.js';
+
+startBot();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
