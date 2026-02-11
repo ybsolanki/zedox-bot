@@ -2,7 +2,8 @@ import { Client, GatewayIntentBits, Message, EmbedBuilder, PermissionsBitField, 
 import dotenv from 'dotenv';
 import { db_manager } from './database.js';
 import { v4 as uuidv4 } from 'uuid';
-import { music_manager } from './music_manager.js';
+import { DisTube } from 'distube';
+import { YtDlpPlugin } from '@distube/yt-dlp';
 
 dotenv.config();
 
@@ -15,6 +16,49 @@ export const client = new Client({
         GatewayIntentBits.GuildVoiceStates,
     ],
 });
+
+// Initialize DisTube
+const distube = new DisTube(client, {
+    leaveOnStop: false,
+    emitNewSongOnly: true,
+    emitAddSongWhenCreatingQueue: false,
+    emitAddListWhenCreatingQueue: false,
+    plugins: [
+        new YtDlpPlugin()
+    ]
+});
+
+// DisTube Event Listeners
+distube
+    .on('playSong', (queue, song) => {
+        const embed = new EmbedBuilder()
+            .setTitle('🎶 Now Playing')
+            .setDescription(`**[${song.name}](${song.url})**`)
+            .addFields(
+                { name: 'Duration', value: song.formattedDuration || 'Unknown', inline: true },
+                { name: 'Requested By', value: `${song.user}`, inline: true }
+            )
+            .setThumbnail(song.thumbnail || null)
+            .setColor('#5865F2');
+        queue.textChannel?.send({ embeds: [embed] });
+    })
+    .on('addSong', (queue, song) => {
+        const embed = new EmbedBuilder()
+            .setDescription(`✅ Added **[${song.name}](${song.url})** to the queue.`)
+            .setColor('#5865F2');
+        queue.textChannel?.send({ embeds: [embed] });
+    })
+    .on('addList', (queue, playlist) => {
+        const embed = new EmbedBuilder()
+            .setDescription(`✅ Added playlist **${playlist.name}** (${playlist.songs.length} songs) to the queue.`)
+            .setColor('#5865F2');
+        queue.textChannel?.send({ embeds: [embed] });
+    })
+    .on('error', (channel: any, e: any) => {
+        console.error(e);
+        if (channel) channel.send(`❌ An error encountered: ${e.toString().slice(0, 1974)}`);
+    });
+
 
 client.once('ready', () => {
     console.log(`Bot logged in as ${client.user?.tag}`);
@@ -465,25 +509,60 @@ client.on('messageCreate', async (message: Message) => {
                 // Music is always enabled
                 const musicQuery = args.join(' ');
                 if (!musicQuery) return message.reply('❌ Please provide a song name or link.');
-                await music_manager.play(message, musicQuery);
+                if (!message.member?.voice?.channel) return message.reply('❌ You must be in a voice channel!');
+
+                try {
+                    await distube.play(message.member.voice.channel, musicQuery, {
+                        member: message.member,
+                        textChannel: message.channel as any,
+                        message
+                    });
+                } catch (e) {
+                    message.reply('❌ Error playing song.');
+                    console.error(e);
+                }
                 break;
 
             case 'skip':
             case 's':
-                await message.reply(music_manager.skip(message.guild.id));
+                try {
+                    const queue = distube.getQueue(message);
+                    if (!queue) return message.reply('❌ Nothing is playing to skip!');
+                    await queue.skip();
+                    message.reply('⏩ Skipped!');
+                } catch (e) {
+                    message.reply('❌ Error skipping song.');
+                }
                 break;
 
             case 'stop':
             case 'leave':
-                await message.reply(music_manager.stop(message.guild.id));
+                try {
+                    const queue = distube.getQueue(message);
+                    if (!queue) {
+                        distube.voices.leave(message.guild);
+                        return message.reply('👋 Left the voice channel.');
+                    }
+                    await queue.stop();
+                    distube.voices.leave(message.guild);
+                    message.reply('⏹️ Stopped music and left.');
+                } catch (e) {
+                    message.reply('❌ Error stopping.');
+                }
                 break;
 
             case 'q':
             case 'queue':
-                const qList = music_manager.getQueue(message.guild.id);
+                const queue = distube.getQueue(message);
+                if (!queue) return message.reply('❌ Queue is empty.');
+                const q = queue.songs
+                    .map((song, i) => `${i === 0 ? 'Playing:' : `${i}.`} ${song.name} - \`${song.formattedDuration}\``)
+                    .join('\n')
+                    .slice(0, 4000); // Discord limit
+
                 const qEmbed = new EmbedBuilder()
-                    .setTitle('🎶 Current Music Queue')
-                    .setDescription(qList)
+                    .setTitle('🎶 Server Queue')
+                    .setDescription(q || 'Empty')
                     .setColor('#5865F2');
                 await (message.channel as any).send({ embeds: [qEmbed] });
                 break;
