@@ -19,7 +19,6 @@ export const client = new Client({
 
 // Initialize DisTube
 const distube = new DisTube(client, {
-    leaveOnStop: false,
     emitNewSongOnly: true,
     emitAddSongWhenCreatingQueue: false,
     emitAddListWhenCreatingQueue: false,
