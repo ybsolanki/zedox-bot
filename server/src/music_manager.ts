@@ -10,6 +10,12 @@ import {
 } from '@discordjs/voice';
 import play from 'play-dl';
 import { Message } from 'discord.js';
+import ffmpegPath from 'ffmpeg-static';
+
+// Explicitly set ffmpeg path for prism-media (used by @discordjs/voice)
+if (ffmpegPath) {
+    (process.env as any).FFMPEG_PATH = ffmpegPath;
+}
 
 interface Song {
     title: string;
