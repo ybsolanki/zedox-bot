@@ -462,7 +462,7 @@ client.on('messageCreate', async (message: Message) => {
 
             case 'p':
             case 'play':
-                if (!config.features?.music) return message.reply('❌ **Music Player** is currently disabled in the dashboard.');
+                // Music is always enabled
                 const musicQuery = args.join(' ');
                 if (!musicQuery) return message.reply('❌ Please provide a song name or link.');
                 await music_manager.play(message, musicQuery);
@@ -470,19 +470,16 @@ client.on('messageCreate', async (message: Message) => {
 
             case 'skip':
             case 's':
-                if (!config.features?.music) return message.reply('❌ **Music Player** is currently disabled.');
                 await message.reply(music_manager.skip(message.guild.id));
                 break;
 
             case 'stop':
             case 'leave':
-                if (!config.features?.music) return message.reply('❌ **Music Player** is currently disabled.');
                 await message.reply(music_manager.stop(message.guild.id));
                 break;
 
             case 'q':
             case 'queue':
-                if (!config.features?.music) return message.reply('❌ **Music Player** is currently disabled.');
                 const qList = music_manager.getQueue(message.guild.id);
                 const qEmbed = new EmbedBuilder()
                     .setTitle('🎶 Current Music Queue')

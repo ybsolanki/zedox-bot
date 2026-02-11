@@ -82,61 +82,17 @@ export class MusicManager {
 
             let songInfo: Song;
 
-            // Comprehensive validation using play-dl (safe check)
+            // Comprehensive validation with fallback
             let validation: any = false;
             try {
                 validation = await play.validate(query);
             } catch (e) {
+                console.warn(`[Music] Validation error: ${e}`);
                 validation = 'search';
             }
 
-            if (validation && validation !== 'search') {
-                if (validation.includes('yt')) {
-                    try {
-                        const info = await play.video_info(query);
-                        songInfo = {
-                            title: info.video_details.title || 'YouTube Track',
-                            url: info.video_details.url,
-                            duration: info.video_details.durationRaw,
-                            thumbnail: info.video_details.thumbnails[0].url
-                        };
-                    } catch (err: any) {
-                        // Fallback to search if link fails (common for bot detection errors)
-                        console.warn(`[Music] Link info failed, falling back to search: ${err.message}`);
-                        const searchResult = await play.search(query, { limit: 1, source: { youtube: 'video' } });
-                        if (searchResult.length === 0) throw new Error('Could not play this link. Try searching for the song name!');
-                        songInfo = {
-                            title: searchResult[0].title || 'Unknown',
-                            url: searchResult[0].url,
-                            duration: searchResult[0].durationRaw,
-                            thumbnail: searchResult[0].thumbnails[0].url
-                        };
-                    }
-                } else if (validation.includes('sp')) {
-                    const spData = await play.spotify(query) as any;
-                    const spTitle = spData.name || 'Spotify Track';
-                    const spArtist = spData.artists ? spData.artists[0].name : '';
-                    const searchResult = await play.search(`${spTitle} ${spArtist}`, { limit: 1, source: { youtube: 'video' } });
-                    if (searchResult.length === 0) return message.reply('❌ Could not find this Spotify track on streaming platforms.');
-                    songInfo = {
-                        title: spTitle,
-                        url: searchResult[0].url,
-                        duration: searchResult[0].durationRaw,
-                        thumbnail: (spData.thumbnail?.url) || (searchResult[0].thumbnails[0].url)
-                    };
-                } else if (validation.includes('so')) {
-                    const soData = await play.soundcloud(query) as any;
-                    songInfo = {
-                        title: soData.name,
-                        url: soData.url,
-                        duration: soData.durationRaw || '0:00',
-                        thumbnail: soData.thumbnail || ''
-                    };
-                } else {
-                    return message.reply(`❌ Link platform \`${validation}\` is not supported yet.`);
-                }
-            } else {
-                // Default search (YouTube)
+            // Force search if validation fails or is 'search'
+            if (!validation || validation === 'search') {
                 const searchResult = await play.search(query, { limit: 1, source: { youtube: 'video' } });
                 if (searchResult.length === 0) return message.reply('❌ No results found on YouTube.');
                 songInfo = {
@@ -145,6 +101,52 @@ export class MusicManager {
                     duration: searchResult[0].durationRaw,
                     thumbnail: searchResult[0].thumbnails[0].url
                 };
+            } else {
+                // Try to handle as a link, but fallback to search if it fails
+                try {
+                    if (validation.includes('yt')) {
+                        const info = await play.video_info(query);
+                        songInfo = {
+                            title: info.video_details.title || 'YouTube Track',
+                            url: info.video_details.url,
+                            duration: info.video_details.durationRaw,
+                            thumbnail: info.video_details.thumbnails[0].url
+                        };
+                    } else if (validation.includes('sp')) {
+                        if (play.is_expired()) await play.refreshToken();
+                        const spData = await play.spotify(query) as any;
+                        const spTitle = spData.name || 'Spotify Track';
+                        const spArtist = spData.artists ? spData.artists[0].name : '';
+                        const searchResult = await play.search(`${spTitle} ${spArtist}`, { limit: 1, source: { youtube: 'video' } });
+                        if (searchResult.length === 0) throw new Error('Spotify track not found on YouTube');
+                        songInfo = {
+                            title: spTitle,
+                            url: searchResult[0].url,
+                            duration: searchResult[0].durationRaw,
+                            thumbnail: (spData.thumbnail?.url) || (searchResult[0].thumbnails[0].url)
+                        };
+                    } else if (validation.includes('so')) {
+                        const soData = await play.soundcloud(query) as any;
+                        songInfo = {
+                            title: soData.name,
+                            url: soData.url,
+                            duration: soData.durationRaw || '0:00',
+                            thumbnail: soData.thumbnail || ''
+                        };
+                    } else {
+                        throw new Error(`Unsupported platform: ${validation}`);
+                    }
+                } catch (linkError: any) {
+                    console.warn(`[Music] Direct link failed (${linkError.message}), falling back to search.`);
+                    const searchResult = await play.search(query, { limit: 1, source: { youtube: 'video' } });
+                    if (searchResult.length === 0) return message.reply('❌ No results found.');
+                    songInfo = {
+                        title: searchResult[0].title || 'Unknown',
+                        url: searchResult[0].url,
+                        duration: searchResult[0].durationRaw,
+                        thumbnail: searchResult[0].thumbnails[0].url
+                    };
+                }
             }
 
             queue.songs.push(songInfo);
