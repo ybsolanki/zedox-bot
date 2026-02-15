@@ -53,11 +53,10 @@ const CommandToggle = ({ name, description, active, onToggle }: any) => (
 );
 
 export default function App() {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [token, setToken] = useState(localStorage.getItem('zedox_token') || '');
-    const [loginInput, setLoginInput] = useState('');
-    const [loginError, setLoginError] = useState('');
-    const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const [user, setUser] = useState<any>(null);
+    const [guilds, setGuilds] = useState<any[]>([]);
+    const [selectedGuild, setSelectedGuild] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
     const [stats, setStats] = useState({ uptime: 0, guilds: 0, users: 0, commandsRun: 0 });
     const [config, setConfig] = useState<any>({ prefix: ',', error_logging: true, status_message: '', features: {} });
@@ -67,96 +66,79 @@ export default function App() {
     const [logs, setLogs] = useState<any[]>([]);
 
     useEffect(() => {
-        if (!token) return;
+        const fetchUser = async () => {
+            try {
+                const res = await fetch('/api/me');
+                if (res.ok) {
+                    const userData = await res.json();
+                    setUser(userData);
+                    fetchGuilds();
+                } else {
+                    setUser(null);
+                }
+            } catch (err) {
+                console.error('Failed to fetch user', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        const fetchGuilds = async () => {
+            try {
+                const res = await fetch('/api/guilds');
+                if (res.ok) {
+                    const guildsData = await res.json();
+                    setGuilds(guildsData);
+                }
+            } catch (err) {
+                console.error('Failed to fetch guilds', err);
+            }
+        };
+
+        fetchUser();
+    }, []);
+
+    useEffect(() => {
+        if (!selectedGuild) return;
 
         const fetchData = async () => {
             try {
-                const configRes = await fetch('/api/config', {
-                    headers: { 'Authorization': token }
-                });
+                const guildId = selectedGuild.id;
 
-                if (configRes.status === 200) {
-                    const configData = await configRes.json();
-                    setConfig(configData);
-                    setIsAuthenticated(true);
-                    setLoginError('');
-                } else if (configRes.status === 401) {
-                    setIsAuthenticated(false);
-                    if (token) setLoginError('Invalid Token! Please check your Render environment variables.');
-                }
+                const configRes = await fetch(`/api/config/${guildId}`);
+                if (configRes.ok) setConfig(await configRes.json());
 
-                // Fetch Auto-Mod Config
-                const automodRes = await fetch('/api/automod', {
-                    headers: { 'Authorization': token }
-                });
+                const automodRes = await fetch(`/api/automod/${guildId}`);
                 if (automodRes.ok) setAutomodConfig(await automodRes.json());
 
-                // Fetch Welcome Config
-                const welcomeRes = await fetch('/api/welcome', {
-                    headers: { 'Authorization': token }
-                });
+                const welcomeRes = await fetch(`/api/welcome/${guildId}`);
                 if (welcomeRes.ok) setWelcomeConfig(await welcomeRes.json());
 
-                // Fetch Violations
-                const violationsRes = await fetch('/api/violations', {
-                    headers: { 'Authorization': token }
-                });
+                const violationsRes = await fetch(`/api/violations/${guildId}`);
                 if (violationsRes.ok) setViolations(await violationsRes.json());
 
-                const statsRes = await fetch('/api/stats', {
-                    headers: { 'Authorization': token }
-                });
-                if (statsRes.ok) {
-                    const statsData = await statsRes.json();
-                    setStats(statsData);
-                }
+                const statsRes = await fetch(`/api/stats/${guildId}`);
+                if (statsRes.ok) setStats(await statsRes.json());
 
-                const logsRes = await fetch('/api/logs', {
-                    headers: { 'Authorization': token }
-                });
-                if (logsRes.ok) {
-                    const logsData = await logsRes.json();
-                    setLogs(logsData);
-                }
+                const logsRes = await fetch(`/api/logs/${guildId}`);
+                if (logsRes.ok) setLogs(await logsRes.json());
             } catch (err) {
-                console.error('Failed to fetch data', err);
+                console.error('Failed to fetch guild data', err);
             }
         };
 
         fetchData();
         const interval = setInterval(fetchData, 10000);
         return () => clearInterval(interval);
-    }, [token]);
+    }, [selectedGuild]);
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsLoggingIn(true);
-        setLoginError('');
-
-        try {
-            const res = await fetch('/api/config', {
-                headers: { 'Authorization': loginInput }
-            });
-
-            if (res.status === 200) {
-                setToken(loginInput);
-                localStorage.setItem('zedox_token', loginInput);
-                setIsAuthenticated(true);
-            } else {
-                setLoginError('Incorrect Token. Make sure it matches the DASHBOARD_TOKEN on Render.');
-            }
-        } catch (err) {
-            setLoginError('Connection failed. Is the bot server running?');
-        } finally {
-            setIsLoggingIn(false);
-        }
+    const handleLogin = () => {
+        window.location.href = '/auth/discord';
     };
 
-    const handleLogout = () => {
-        setToken('');
-        setLoginInput('');
-        setIsAuthenticated(false);
-        localStorage.removeItem('zedox_token');
+    const handleLogout = async () => {
+        await fetch('/auth/logout');
+        window.location.href = '/';
     };
 
     const formatUptime = (seconds: number) => {
@@ -173,48 +155,39 @@ export default function App() {
     };
 
     const handleUpdateConfig = async (key: string, value: any) => {
+        if (!selectedGuild) return;
         try {
-            const res = await fetch('/api/config', {
+            const res = await fetch(`/api/config/${selectedGuild.id}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ key, value })
             });
 
-            if (res.status === 401) {
-                alert('Invalid Token! Please log in again.');
-                handleLogout();
-                return;
+            if (res.ok) {
+                setConfig((prev: any) => {
+                    const newConfig = { ...prev };
+                    if (key.startsWith('features.')) {
+                        const featureKey = key.split('.')[1];
+                        newConfig.features = { ...newConfig.features, [featureKey]: value };
+                    } else {
+                        newConfig[key] = value;
+                    }
+                    return newConfig;
+                });
             }
-
-            // Update local state correctly for nested keys
-            setConfig((prev: any) => {
-                const newConfig = { ...prev };
-                if (key.startsWith('features.')) {
-                    const featureKey = key.split('.')[1];
-                    newConfig.features = { ...newConfig.features, [featureKey]: value };
-                } else {
-                    newConfig[key] = value;
-                }
-                return newConfig;
-            });
         } catch (err) {
             console.error('Update failed', err);
         }
     };
 
     const handleUpdateAutomod = async (updates: any) => {
+        if (!selectedGuild) return;
         try {
             const newConfig = { ...automodConfig, ...updates };
             setAutomodConfig(newConfig);
-            await fetch('/api/automod', {
+            await fetch(`/api/automod/${selectedGuild.id}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newConfig)
             });
         } catch (err) {
@@ -223,15 +196,13 @@ export default function App() {
     };
 
     const handleUpdateWelcome = async (updates: any) => {
+        if (!selectedGuild) return;
         try {
             const newConfig = { ...welcomeConfig, ...updates };
             setWelcomeConfig(newConfig);
-            await fetch('/api/welcome', {
+            await fetch(`/api/welcome/${selectedGuild.id}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newConfig)
             });
         } catch (err) {
@@ -239,9 +210,13 @@ export default function App() {
         }
     };
 
+    if (isLoading) {
+        return <div className="min-h-screen bg-background flex items-center justify-center text-white">Loading...</div>;
+    }
+
     return (
         <div className="min-h-screen bg-background text-text flex">
-            {!isAuthenticated ? (
+            {!user ? (
                 <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-background via-surface to-background">
                     <div className="max-w-md w-full bg-surface p-12 rounded-3xl border border-white/5 shadow-2xl space-y-8">
                         <div className="text-center space-y-4">
@@ -249,40 +224,48 @@ export default function App() {
                                 <ShieldCheck size={32} className="text-white" />
                             </div>
                             <h2 className="text-3xl font-bold text-white">Zedox Dashboard</h2>
-                            <p className="text-white/40">Enter your access token to continue.</p>
+                            <p className="text-white/40">Login with Discord to manage your servers.</p>
                         </div>
-                        <form onSubmit={handleLogin} className="space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-white/40 uppercase tracking-widest ml-1">Access Token</label>
-                                <input
-                                    type="password"
-                                    value={loginInput}
-                                    onChange={(e) => setLoginInput(e.target.value)}
-                                    placeholder="••••••••••••••••"
-                                    className={cn(
-                                        "w-full bg-white/5 border rounded-xl px-4 py-4 text-white focus:outline-none transition-all placeholder:text-white/10",
-                                        loginError ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-primary"
-                                    )}
-                                    required
-                                />
-                                {loginError && (
-                                    <div className="text-red-400 text-xs font-bold mt-2 ml-1 animate-pulse flex items-center gap-1">
-                                        <Activity size={12} /> {loginError}
+                        <button
+                            onClick={handleLogin}
+                            className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#5865F2]/20 transition-all flex items-center justify-center gap-3 group"
+                        >
+                            <img src="https://assets-global.website-files.com/6257adef93867e3ed1449492/6257adef93867e611844955b_White%20Logo.svg" alt="Discord" className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                            Login with Discord
+                        </button>
+                    </div>
+                </div>
+            ) : !selectedGuild ? (
+                <div className="flex-1 p-12 bg-gradient-to-br from-background via-surface to-background overflow-y-auto">
+                    <div className="max-w-6xl mx-auto space-y-12">
+                        <header className="text-center space-y-4">
+                            <h1 className="text-5xl font-extrabold text-white">Welcome back, <span className="text-primary">{user.username}</span>!</h1>
+                            <p className="text-xl text-white/40">Please select a server to get started</p>
+                        </header>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                            {guilds.map((guild) => (
+                                <button
+                                    key={guild.id}
+                                    onClick={() => setSelectedGuild(guild)}
+                                    className="bg-surface p-8 rounded-3xl border border-white/5 shadow-xl hover:border-primary/50 hover:bg-white/5 transition-all group text-center space-y-4"
+                                >
+                                    <div className="relative mx-auto w-24 h-24">
+                                        {guild.icon ? (
+                                            <img src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`} alt={guild.name} className="w-24 h-24 rounded-full shadow-2xl group-hover:scale-105 transition-transform" />
+                                        ) : (
+                                            <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center text-3xl font-bold text-primary group-hover:scale-105 transition-transform">
+                                                {guild.name.charAt(0)}
+                                            </div>
+                                        )}
+                                        <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 border-4 border-surface rounded-full flex items-center justify-center text-white">
+                                            <ShieldCheck size={14} />
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                            <button
-                                type="submit"
-                                disabled={isLoggingIn}
-                                className={cn(
-                                    "w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 group",
-                                    isLoggingIn && "opacity-50 cursor-not-allowed"
-                                )}
-                            >
-                                {isLoggingIn ? "Authenticating..." : "Access Dashboard"}
-                                {!isLoggingIn && <Zap size={18} className="group-hover:scale-110 transition-transform" />}
-                            </button>
-                        </form>
+                                    <div className="font-bold text-white text-lg truncate px-2">{guild.name}</div>
+                                    <div className="text-primary/60 text-xs font-bold uppercase tracking-widest group-hover:text-primary transition-colors">Select Server</div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             ) : (
@@ -290,10 +273,14 @@ export default function App() {
                     {/* Sidebar */}
                     <aside className="w-72 bg-surface/50 border-r border-white/5 p-8 flex flex-col gap-8">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-                                <ShieldCheck size={24} className="text-white" />
+                            <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 overflow-hidden">
+                                {selectedGuild?.icon ? (
+                                    <img src={`https://cdn.discordapp.com/icons/${selectedGuild.id}/${selectedGuild.icon}.png`} alt={selectedGuild.name} />
+                                ) : (
+                                    <ShieldCheck size={24} className="text-white" />
+                                )}
                             </div>
-                            <span className="text-xl font-bold tracking-tight text-white">ZEDOX <span className="text-primary text-xs ml-1 uppercase">v1.2</span></span>
+                            <span className="text-xl font-bold tracking-tight text-white uppercase truncate">{selectedGuild?.name}</span>
                         </div>
 
                         <nav className="flex flex-col gap-2">
@@ -354,13 +341,19 @@ export default function App() {
                         </nav>
 
                         <div className="mt-auto pt-8 border-t border-white/5 flex flex-col gap-4">
+                            <button
+                                onClick={() => setSelectedGuild(null)}
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-white/50 hover:bg-white/5 transition-all text-sm font-medium border border-white/5"
+                            >
+                                <Activity size={18} /> Switch Server
+                            </button>
                             <div className="bg-white/5 p-4 rounded-xl flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-white/10 overflow-hidden">
-                                    <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=Zedox" alt="Avatar" />
+                                    <img src={`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`} alt="Avatar" />
                                 </div>
                                 <div>
                                     <div className="text-xs text-white/40 font-medium">Logged in as</div>
-                                    <div className="text-sm font-bold text-white">Zedox Admin</div>
+                                    <div className="text-sm font-bold text-white truncate max-w-[100px]">{user.username}</div>
                                 </div>
                                 <button
                                     onClick={handleLogout}
@@ -378,14 +371,14 @@ export default function App() {
                         <header className="flex justify-between items-center mb-12">
                             <div>
                                 <h1 className="text-4xl font-extrabold text-white mb-2">
-                                    Dashboard <span className="text-primary">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</span>
+                                    {selectedGuild?.name} <span className="text-primary">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</span>
                                 </h1>
-                                <p className="text-white/40 font-medium">Manage and monitor your Zedox Bot instance.</p>
+                                <p className="text-white/40 font-medium">Manage and monitor your Zedox Bot on {selectedGuild?.name}.</p>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2 bg-green-500/10 text-green-400 px-4 py-2 rounded-full border border-green-500/20 font-bold text-sm">
                                     <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                                    SYSTEM ONLINE
+                                    SERVER CONNECTED
                                 </div>
                                 <button className="p-3 bg-white/5 border border-white/5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all">
                                     <Moon size={20} />

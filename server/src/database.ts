@@ -13,7 +13,7 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-interface DBData {
+interface GuildConfig {
   config: {
     prefix: string;
     error_logging: boolean;
@@ -66,7 +66,12 @@ interface DBData {
   warnings: any[];
 }
 
-const defaultData: DBData = {
+interface DBData {
+  guilds: { [guildId: string]: GuildConfig };
+  users: { [userId: string]: { accessToken: string; refreshToken: string; profile: any } };
+}
+
+const defaultGuildData: GuildConfig = {
   config: {
     prefix: ',',
     error_logging: true,
@@ -119,75 +124,107 @@ const defaultData: DBData = {
   warnings: []
 };
 
+const defaultData: DBData = {
+  guilds: {},
+  users: {}
+};
+
 function readDB(): DBData {
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, JSON.stringify(defaultData, null, 2));
     return defaultData;
   }
-  return JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+  // Migration or initialization
+  if (!data.guilds) return { guilds: {}, users: {} };
+  return data;
 }
 
 function writeDB(data: DBData) {
   fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
 }
 
+function getGuildData(data: DBData, guildId: string): GuildConfig {
+  if (!data.guilds[guildId]) {
+    data.guilds[guildId] = JSON.parse(JSON.stringify(defaultGuildData));
+  }
+  return data.guilds[guildId];
+}
+
 export const db_manager = {
-  getConfig: () => readDB().config,
-  updateConfig: (key: string, value: any) => {
+  getConfig: (guildId: string) => getGuildData(readDB(), guildId).config,
+  updateConfig: (guildId: string, key: string, value: any) => {
     const data = readDB();
+    const guildData = getGuildData(data, guildId);
     if (key.startsWith('features.')) {
       const featureKey = key.split('.')[1];
-      (data.config.features as any)[featureKey] = value;
+      (guildData.config.features as any)[featureKey] = value;
     } else {
-      (data.config as any)[key] = value;
+      (guildData.config as any)[key] = value;
     }
     writeDB(data);
   },
-  logCommand: (id: string, command: string, user: string, guild: string, success: boolean) => {
+  logCommand: (id: string, command: string, user: string, guildId: string, success: boolean) => {
     const data = readDB();
-    data.command_logs.push({ id, command, user_tag: user, guild_id: guild, success, timestamp: new Date().toISOString() });
+    const guildData = getGuildData(data, guildId);
+    guildData.command_logs.push({ id, command, user_tag: user, guild_id: guildId, success, timestamp: new Date().toISOString() });
     writeDB(data);
   },
   addMute: (userId: string, guildId: string, expiresAt: string) => {
     const data = readDB();
-    data.mutes = data.mutes.filter(m => m.user_id !== userId);
-    data.mutes.push({ user_id: userId, guild_id: guildId, expires_at: expiresAt });
+    const guildData = getGuildData(data, guildId);
+    guildData.mutes = guildData.mutes.filter(m => m.user_id !== userId);
+    guildData.mutes.push({ user_id: userId, guild_id: guildId, expires_at: expiresAt });
     writeDB(data);
   },
-  getExpiredMutes: () => {
+  getExpiredMutes: (guildId: string) => {
     const now = new Date();
-    return readDB().mutes.filter(m => new Date(m.expires_at) <= now);
+    return getGuildData(readDB(), guildId).mutes.filter(m => new Date(m.expires_at) <= now);
   },
-  removeMute: (userId: string) => {
+  getAllExpiredMutes: () => {
     const data = readDB();
-    data.mutes = data.mutes.filter(m => m.user_id !== userId);
+    const now = new Date();
+    let allExpired: any[] = [];
+    for (const guildId in data.guilds) {
+      const expired = data.guilds[guildId].mutes.filter(m => new Date(m.expires_at) <= now);
+      allExpired = allExpired.concat(expired);
+    }
+    return allExpired;
+  },
+  removeMute: (userId: string, guildId: string) => {
+    const data = readDB();
+    const guildData = getGuildData(data, guildId);
+    guildData.mutes = guildData.mutes.filter(m => m.user_id !== userId);
     writeDB(data);
   },
-  getLogs: (limit = 10) => {
-    const data = readDB();
-    return data.command_logs.slice(-limit).reverse();
+  getLogs: (guildId: string, limit = 10) => {
+    const guildData = getGuildData(readDB(), guildId);
+    return guildData.command_logs.slice(-limit).reverse();
   },
 
   // Auto-Mod Methods
-  getAutoModConfig: () => readDB().automod_config,
-  updateAutoModConfig: (updates: Partial<DBData['automod_config']>) => {
+  getAutoModConfig: (guildId: string) => getGuildData(readDB(), guildId).automod_config,
+  updateAutoModConfig: (guildId: string, updates: Partial<GuildConfig['automod_config']>) => {
     const data = readDB();
-    data.automod_config = { ...data.automod_config, ...updates };
+    const guildData = getGuildData(data, guildId);
+    guildData.automod_config = { ...guildData.automod_config, ...updates };
     writeDB(data);
   },
 
   // Welcome System Methods
-  getWelcomeConfig: () => readDB().welcome_config,
-  updateWelcomeConfig: (updates: Partial<DBData['welcome_config']>) => {
+  getWelcomeConfig: (guildId: string) => getGuildData(readDB(), guildId).welcome_config,
+  updateWelcomeConfig: (guildId: string, updates: Partial<GuildConfig['welcome_config']>) => {
     const data = readDB();
-    data.welcome_config = { ...data.welcome_config, ...updates };
+    const guildData = getGuildData(data, guildId);
+    guildData.welcome_config = { ...guildData.welcome_config, ...updates };
     writeDB(data);
   },
 
   // Violation Tracking
   addViolation: (userId: string, guildId: string, reason: string, content: string) => {
     const data = readDB();
-    data.violations.push({
+    const guildData = getGuildData(data, guildId);
+    guildData.violations.push({
       id: uuidv4(),
       user_id: userId,
       guild_id: guildId,
@@ -195,21 +232,21 @@ export const db_manager = {
       content,
       timestamp: new Date().toISOString()
     });
-    // Keep only last 1000 violations
-    if (data.violations.length > 1000) {
-      data.violations = data.violations.slice(-1000);
+    if (guildData.violations.length > 1000) {
+      guildData.violations = guildData.violations.slice(-1000);
     }
     writeDB(data);
   },
-  getViolations: (limit = 100) => {
-    const data = readDB();
-    return data.violations.slice(-limit).reverse();
+  getViolations: (guildId: string, limit = 100) => {
+    const guildData = getGuildData(readDB(), guildId);
+    return guildData.violations.slice(-limit).reverse();
   },
 
   // Warning System
   addWarning: (userId: string, guildId: string, reason: string) => {
     const data = readDB();
-    data.warnings.push({
+    const guildData = getGuildData(data, guildId);
+    guildData.warnings.push({
       id: uuidv4(),
       user_id: userId,
       guild_id: guildId,
@@ -218,17 +255,26 @@ export const db_manager = {
     });
     writeDB(data);
   },
-  getUserWarnings: (userId: string, hoursBack: number) => {
-    const data = readDB();
+  getUserWarnings: (userId: string, guildId: string, hoursBack: number) => {
+    const guildData = getGuildData(readDB(), guildId);
     const cutoff = new Date(Date.now() - hoursBack * 3600000);
-    return data.warnings.filter(w =>
+    return guildData.warnings.filter(w =>
       w.user_id === userId && new Date(w.timestamp) > cutoff
     );
   },
-  clearOldWarnings: (hoursBack: number) => {
+  clearOldWarnings: (guildId: string, hoursBack: number) => {
     const data = readDB();
+    const guildData = getGuildData(data, guildId);
     const cutoff = new Date(Date.now() - hoursBack * 3600000);
-    data.warnings = data.warnings.filter(w => new Date(w.timestamp) > cutoff);
+    guildData.warnings = guildData.warnings.filter(w => new Date(w.timestamp) > cutoff);
     writeDB(data);
-  }
+  },
+
+  // User Data for OAuth2
+  upsertUser: (userId: string, accessToken: string, refreshToken: string, profile: any) => {
+    const data = readDB();
+    data.users[userId] = { accessToken, refreshToken, profile };
+    writeDB(data);
+  },
+  getUser: (userId: string) => readDB().users[userId]
 };

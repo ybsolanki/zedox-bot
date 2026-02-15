@@ -61,27 +61,26 @@ distube
 
 client.once('ready', () => {
     console.log(`Bot logged in as ${client.user?.tag}`);
-    const config = db_manager.getConfig();
-    client.user?.setActivity(config.status_message || 'Zedox Dashboard');
+    // Use a default or global status message or fetch from a specific guild if needed
+    client.user?.setActivity('Zedox Dashboard');
 
-    // Check for expired mutes every minute
+    // Check for expired mutes every minute across all guilds
     setInterval(async () => {
-        const expired = db_manager.getExpiredMutes();
+        const expired = db_manager.getAllExpiredMutes();
         for (const mute of expired) {
             const guild = client.guilds.cache.get(mute.guild_id);
             const member = await guild?.members.fetch(mute.user_id).catch(() => null);
             if (member) {
-                // Unmute logic (usually removing a role or un-timeout)
                 await member.timeout(null, 'Timed mute expired').catch(console.error);
             }
-            db_manager.removeMute(mute.user_id);
+            db_manager.removeMute(mute.user_id, mute.guild_id);
         }
     }, 60000);
 });
 
 // Utility: Send Moderation Log
 const sendModLog = async (guild: any, title: string, description: string, color: string = '#FF0000', fields: any[] = []) => {
-    const config = db_manager.getConfig();
+    const config = db_manager.getConfig(guild.id);
     if (!config.mod_log_channel_id) return;
 
     const channel = guild.channels.cache.get(config.mod_log_channel_id);
@@ -103,7 +102,7 @@ const sendModLog = async (guild: any, title: string, description: string, color:
 
 // Welcome Messages System
 client.on('guildMemberAdd', async (member) => {
-    const welcomeConfig = db_manager.getWelcomeConfig();
+    const welcomeConfig = db_manager.getWelcomeConfig(member.guild.id);
     if (!welcomeConfig.enabled || !welcomeConfig.channel_id) return;
 
     const channel = member.guild.channels.cache.get(welcomeConfig.channel_id);
@@ -176,11 +175,11 @@ client.on('interactionCreate', async (interaction) => {
         const guild = interaction.guild;
         if (!guild) return;
 
-        const config = db_manager.getConfig();
+        const config = db_manager.getConfig(guild.id);
         if (!config.ticket_category_id) return interaction.reply({ content: '❌ Ticket system is not configured.', ephemeral: true });
 
         const ticketNum = config.ticket_count + 1;
-        db_manager.updateConfig('ticket_count', ticketNum);
+        db_manager.updateConfig(guild.id, 'ticket_count', ticketNum);
 
         try {
             const ticketChannel = await guild.channels.create({
@@ -251,8 +250,8 @@ const checkProfanity = (content: string, bannedWords: string[]): boolean => {
 client.on('messageCreate', async (message: Message) => {
     if (message.author.bot || !message.guild) return;
 
-    const config = db_manager.getConfig();
-    const automodConfig = db_manager.getAutoModConfig();
+    const config = db_manager.getConfig(message.guild.id);
+    const automodConfig = db_manager.getAutoModConfig(message.guild.id);
 
     // Auto-Mod: Content Filter
     if (automodConfig.enabled) {
@@ -266,7 +265,7 @@ client.on('messageCreate', async (message: Message) => {
             if (automodConfig.warn_on_violation) {
                 db_manager.addWarning(message.author.id, message.guild.id, 'Usage of banned words');
 
-                const userWarnings = db_manager.getUserWarnings(message.author.id, automodConfig.warning_expiry_hours);
+                const userWarnings = db_manager.getUserWarnings(message.author.id, message.guild.id, automodConfig.warning_expiry_hours);
 
                 if (userWarnings.length >= automodConfig.warnings_before_mute) {
                     if (automodConfig.mute_on_violation || true) { // Default to timeout for now
@@ -449,7 +448,7 @@ client.on('messageCreate', async (message: Message) => {
                     await unmuteUser.roles.remove(config.muted_role_id).catch(() => { });
                 }
 
-                db_manager.removeMute(unmuteUser.id);
+                db_manager.removeMute(unmuteUser.id, message.guild.id);
                 await message.reply(`✅ Unmuted ${unmuteUser.user.tag}.`);
 
                 await sendModLog(message.guild, 'User Unmuted', `${unmuteUser.user.tag} was unmuted.`, '#00FF00', [
@@ -505,7 +504,7 @@ client.on('messageCreate', async (message: Message) => {
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Admin required.');
                 const newPrefix = args[0];
                 if (!newPrefix) return message.reply('❌ Provide a new prefix.');
-                db_manager.updateConfig('prefix', newPrefix);
+                db_manager.updateConfig(message.guild.id, 'prefix', newPrefix);
                 await message.reply(`✅ Prefix updated to \`${newPrefix}\`.`);
                 break;
 
@@ -551,7 +550,7 @@ client.on('messageCreate', async (message: Message) => {
                         color: '#818386',
                         reason: 'Zedox HQ Setup - Muted Role'
                     });
-                    db_manager.updateConfig('muted_role_id', mutedRole.id);
+                    db_manager.updateConfig(guild.id, 'muted_role_id', mutedRole.id);
 
                     const modRole = createdRoles['🛡 Moderator'];
                     const staffManagerRole = createdRoles['🛡 Staff Manager'];
@@ -603,7 +602,7 @@ client.on('messageCreate', async (message: Message) => {
                             ...staffRoles.map(id => ({ id, allow: [PermissionsBitField.Flags.ViewChannel] }))
                         ]
                     });
-                    db_manager.updateConfig('mod_log_channel_id', logChannel.id);
+                    db_manager.updateConfig(guild.id, 'mod_log_channel_id', logChannel.id);
 
                     // 6. CATEGORY: VOICE CHANNELS
                     const catVoice = await guild.channels.create({ name: '🔊 VOICE CHANNELS', type: ChannelType.GuildCategory });
@@ -612,8 +611,8 @@ client.on('messageCreate', async (message: Message) => {
 
                     // 7. CATEGORY: TICKETS
                     const catTickets = await guild.channels.create({ name: '🎫 TICKETS', type: ChannelType.GuildCategory });
-                    db_manager.updateConfig('ticket_category_id', catTickets.id);
-                    db_manager.updateConfig('staff_role_id', staffManagerRole.id);
+                    db_manager.updateConfig(guild.id, 'ticket_category_id', catTickets.id);
+                    db_manager.updateConfig(guild.id, 'staff_role_id', staffManagerRole.id);
 
                     const ticketSetupChannel = await guild.channels.create({
                         name: '🎫┃create-a-ticket',
@@ -784,7 +783,7 @@ client.on('messageCreate', async (message: Message) => {
 
             case 'testwelcome':
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Admin required.');
-                const welcomeConfig = db_manager.getWelcomeConfig();
+                const welcomeConfig = db_manager.getWelcomeConfig(message.guild.id);
                 if (!welcomeConfig.enabled) return message.reply('❌ Welcome system is currently disabled in the dashboard.');
                 if (!welcomeConfig.channel_id) return message.reply('❌ No welcome channel configured in the dashboard.');
 
@@ -801,13 +800,13 @@ client.on('messageCreate', async (message: Message) => {
                         type: ChannelType.GuildText,
                         permissionOverwrites: [
                             {
-                                id: message.guild.id,
+                                id: message.guild.roles.everyone,
                                 deny: [PermissionsBitField.Flags.ViewChannel],
                             },
                         ],
                     });
-                    db_manager.updateConfig('mod_log_channel_id', logChannel.id);
-                    await message.reply(`✅ Created and configured mod-logs channel: ${logChannel}`);
+                    db_manager.updateConfig(message.guild.id, 'mod_log_channel_id', logChannel.id);
+                    await message.reply(`✅ Moderation logs channel created: ${logChannel}`);
                     await sendModLog(message.guild, 'System Setup', `Log channel configured by ${message.author.tag}`, '#00FF00');
                 } catch (error) {
                     await message.reply('❌ Failed to create channel. Check my permissions.');
@@ -839,7 +838,7 @@ client.on('messageCreate', async (message: Message) => {
                         } catch (e) { }
                     });
 
-                    db_manager.updateConfig('muted_role_id', mutedRole.id);
+                    db_manager.updateConfig(message.guild.id, 'muted_role_id', mutedRole.id);
                     await message.reply(`✅ Created and configured "Muted" role: ${mutedRole}`);
                     await sendModLog(message.guild, 'System Setup', `Muted role created and configured by ${message.author.tag}`, '#00FF00');
                 } catch (error) {
