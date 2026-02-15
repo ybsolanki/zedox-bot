@@ -453,7 +453,7 @@ client.on('messageCreate', async (message: Message) => {
 
             case 'setup':
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Administrator role is required to run setup.');
-                const setupMsg = await message.reply('⏳ **Starting professional server setup...** This may take a minute.');
+                const setupMsg = await message.reply('⏳ **Starting Zedox HQ server setup...** This will be awesome!');
 
                 try {
                     const guild = message.guild;
@@ -461,22 +461,14 @@ client.on('messageCreate', async (message: Message) => {
 
                     // 1. CREATE ROLES (Top to Bottom)
                     const roleData = [
-                        { name: '🔺 Management', color: '#880808', hoist: true },
-                        { name: '👑 Owner', color: '#FFD700', hoist: true },
-                        { name: '🛡 Admin', color: '#FF0000', hoist: true },
-                        { name: '📋 Moderator', color: '#00FF00', hoist: true },
-                        { name: '👨‍🏫 Academic', color: '#FF8C00', hoist: true },
-                        { name: '🎓 Teacher', color: '#FFA500', hoist: true },
-                        { name: '🧑‍🏫 Doubt Support', color: '#FFFF00', hoist: true },
-                        // Student Roles (Blue Family)
-                        { name: '9th', color: '#ADD8E6' },
-                        { name: '10th', color: '#87CEEB' },
-                        { name: '11th-PCM', color: '#00BFFF' },
-                        { name: '11th-PCB', color: '#1E90FF' },
-                        { name: '12th-PCM', color: '#6495ED' },
-                        { name: '12th-PCB', color: '#4169E1' },
-                        { name: '12th-PCM-Dropper', color: '#0000FF' },
-                        { name: '12th-PCB-Dropper', color: '#00008B' }
+                        { name: '👑 HQ Owner', color: '#FFD700', hoist: true, permissions: [PermissionsBitField.Flags.Administrator] },
+                        { name: '🛠 Lead Developer', color: '#00BFFF', hoist: true, permissions: [PermissionsBitField.Flags.Administrator] },
+                        { name: '🛡 Staff Manager', color: '#880808', hoist: true, permissions: [PermissionsBitField.Flags.Administrator] },
+                        { name: '🛡 Moderator', color: '#00FF00', hoist: true, permissions: [PermissionsBitField.Flags.ManageMessages, PermissionsBitField.Flags.KickMembers, PermissionsBitField.Flags.BanMembers] },
+                        { name: '🤝 Partner', color: '#FF69B4', hoist: true },
+                        { name: '💎 Premium User', color: '#FFD700', hoist: true },
+                        { name: '👤 Zedox Member', color: '#ADD8E6', hoist: false },
+                        { name: '🤖 Bot', color: '#818386', hoist: true, permissions: [PermissionsBitField.Flags.Administrator] }
                     ];
 
                     const createdRoles: any = {};
@@ -485,12 +477,22 @@ client.on('messageCreate', async (message: Message) => {
                             name: rd.name,
                             color: rd.color as any,
                             hoist: rd.hoist || false,
-                            reason: 'Server Setup'
+                            permissions: rd.permissions || [],
+                            reason: 'Zedox HQ Setup'
                         });
                     }
 
-                    const modRole = createdRoles['📋 Moderator'];
-                    const teacherRole = createdRoles['🎓 Teacher'];
+                    // Create Muted Role
+                    const mutedRole = await guild.roles.create({
+                        name: 'Muted',
+                        color: '#818386',
+                        reason: 'Zedox HQ Setup - Muted Role'
+                    });
+                    db_manager.updateConfig('muted_role_id', mutedRole.id);
+
+                    const modRole = createdRoles['🛡 Moderator'];
+                    const staffManagerRole = createdRoles['🛡 Staff Manager'];
+                    const staffRoles = [modRole.id, staffManagerRole.id, createdRoles['🛠 Lead Developer'].id, createdRoles['👑 HQ Owner'].id];
 
                     // 2. CATEGORY: WELCOME & INFO
                     const catWelcome = await guild.channels.create({ name: '📌 WELCOME & INFO', type: ChannelType.GuildCategory });
@@ -501,128 +503,71 @@ client.on('messageCreate', async (message: Message) => {
                         parent: catWelcome.id,
                         permissionOverwrites: [
                             { id: everyone.id, deny: [PermissionsBitField.Flags.SendMessages] },
-                            { id: modRole.id, allow: [PermissionsBitField.Flags.SendMessages] },
-                            { id: teacherRole.id, allow: [PermissionsBitField.Flags.SendMessages] }
+                            { id: modRole.id, allow: [PermissionsBitField.Flags.SendMessages] }
                         ]
                     });
-                    const channelSelect = await guild.channels.create({ name: '🎓┃select-your-class', parent: catWelcome.id });
-                    await guild.channels.create({ name: '🆘┃help-desk', parent: catWelcome.id });
+                    await guild.channels.create({ name: '🔗┃links', parent: catWelcome.id });
 
-                    // Send Role Selection Message
-                    const studentRoles = roleData.filter(rd => !rd.hoist);
-                    const embed = new EmbedBuilder()
-                        .setTitle('🎓 Select Your Class')
-                        .setDescription('Click the buttons below to assign yourself to your respective class. You can only have one class role at a time.')
-                        .setColor('#5865F2')
-                        .setFooter({ text: 'Zedox Academic System' });
+                    // 3. CATEGORY: COMMUNITY
+                    const catCommunity = await guild.channels.create({ name: '🌐 COMMUNITY', type: ChannelType.GuildCategory });
+                    await guild.channels.create({ name: '💬┃general', parent: catCommunity.id });
+                    await guild.channels.create({ name: '📸┃media', parent: catCommunity.id });
+                    await guild.channels.create({ name: '🤖┃commands', parent: catCommunity.id });
 
-                    const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-                    for (let i = 0; i < studentRoles.length; i += 4) {
-                        const row = new ActionRowBuilder<ButtonBuilder>();
-                        const slice = studentRoles.slice(i, i + 4);
-                        slice.forEach(sr => {
-                            row.addComponents(
-                                new ButtonBuilder()
-                                    .setCustomId(`role_${sr.name}`)
-                                    .setLabel(sr.name)
-                                    .setStyle(ButtonStyle.Primary)
-                            );
-                        });
-                        rows.push(row);
-                    }
+                    // 4. CATEGORY: ZEDOX BOT SUPPORT
+                    const catSupport = await guild.channels.create({ name: '🤖 ZEDOX BOT SUPPORT', type: ChannelType.GuildCategory });
+                    await guild.channels.create({ name: '🎫┃support-tickets', parent: catSupport.id });
+                    await guild.channels.create({ name: '💡┃suggestions', parent: catSupport.id });
+                    await guild.channels.create({ name: '🐛┃bug-reports', parent: catSupport.id });
+                    await guild.channels.create({ name: '📚┃bot-guide', parent: catSupport.id });
 
-                    await (channelSelect as any).send({ embeds: [embed], components: rows });
+                    // 5. CATEGORY: STAFF AREA (PRIVATE)
+                    const catStaff = await guild.channels.create({
+                        name: '🔐 STAFF AREA',
+                        type: ChannelType.GuildCategory,
+                        permissionOverwrites: [
+                            { id: everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                            ...staffRoles.map(id => ({ id, allow: [PermissionsBitField.Flags.ViewChannel] }))
+                        ]
+                    });
+                    await guild.channels.create({ name: '🔐┃staff-chat', parent: catStaff.id });
+                    await guild.channels.create({ name: '🛠┃staff-commands', parent: catStaff.id });
+                    const logChannel = await guild.channels.create({
+                        name: '📜┃mod-logs',
+                        parent: catStaff.id,
+                        permissionOverwrites: [
+                            { id: everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                            ...staffRoles.map(id => ({ id, allow: [PermissionsBitField.Flags.ViewChannel] }))
+                        ]
+                    });
+                    db_manager.updateConfig('mod_log_channel_id', logChannel.id);
 
-                    // 3. CATEGORY: COMMON AREA
-                    const catCommon = await guild.channels.create({ name: '🌐 COMMON AREA', type: ChannelType.GuildCategory });
-                    await guild.channels.create({ name: '💬┃general-chat', parent: catCommon.id });
-                    await guild.channels.create({ name: '📚┃study-tips', parent: catCommon.id });
-                    await guild.channels.create({ name: '🎯┃motivation', parent: catCommon.id });
-                    await guild.channels.create({ name: '🎙┃common-vc', type: ChannelType.GuildVoice, parent: catCommon.id });
+                    // 6. CATEGORY: VOICE CHANNELS
+                    const catVoice = await guild.channels.create({ name: '🔊 VOICE CHANNELS', type: ChannelType.GuildCategory });
+                    await guild.channels.create({ name: '🔊┃Lounge', type: ChannelType.GuildVoice, parent: catVoice.id });
+                    await guild.channels.create({ name: '🎮┃Gaming', type: ChannelType.GuildVoice, parent: catVoice.id });
 
-                    // Helper to create Class Categories
-                    const createClassCategory = async (catName: string, roleName: string, channels: { name: string, type?: any }[]) => {
-                        const classRole = createdRoles[roleName];
-                        const category = await guild.channels.create({
-                            name: catName,
-                            type: ChannelType.GuildCategory,
-                            permissionOverwrites: [
-                                { id: everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                                { id: classRole.id, allow: [PermissionsBitField.Flags.ViewChannel] },
-                                { id: teacherRole.id, allow: [PermissionsBitField.Flags.ViewChannel] },
-                                { id: modRole.id, allow: [PermissionsBitField.Flags.ViewChannel] }
-                            ]
-                        });
-
-                        for (const ch of channels) {
-                            await guild.channels.create({
-                                name: ch.name,
-                                type: ch.type || ChannelType.GuildText,
-                                parent: category.id
-                            });
-                        }
-                    };
-
-                    // 4. CLASS 9 & 10
-                    await createClassCategory('📘 CLASS 9', '9th', [{ name: '💬┃9-chat' }, { name: '❓┃9-doubts' }, { name: '🔊┃9-main-vc', type: ChannelType.GuildVoice }]);
-                    await createClassCategory('📗 CLASS 10', '10th', [{ name: '💬┃10-chat' }, { name: '❓┃10-doubts' }, { name: '🔊┃10-main-vc', type: ChannelType.GuildVoice }]);
-
-                    // 5. CLASS 11 PCM/PCB
-                    await createClassCategory('📙 CLASS 11 – PCM', '11th-PCM', [
-                        { name: '💬┃11-pcm-chat' }, { name: '❓┃11-pcm-doubts' },
-                        { name: '🔊┃11-pcm-physics-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃11-pcm-chemistry-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃11-pcm-maths-vc', type: ChannelType.GuildVoice }
-                    ]);
-                    await createClassCategory('📙 CLASS 11 – PCB', '11th-PCB', [
-                        { name: '💬┃11-pcb-chat' }, { name: '❓┃11-pcb-doubts' },
-                        { name: '🔊┃11-pcb-biology-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃11-pcb-chemistry-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃11-pcb-physics-vc', type: ChannelType.GuildVoice }
-                    ]);
-
-                    // 6. CLASS 12 PCM/PCB
-                    await createClassCategory('📕 CLASS 12 – PCM', '12th-PCM', [
-                        { name: '💬┃12-pcm-chat' }, { name: '❓┃12-pcm-doubts' },
-                        { name: '🔊┃12-pcm-physics-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃12-pcm-chemistry-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃12-pcm-maths-vc', type: ChannelType.GuildVoice }
-                    ]);
-                    await createClassCategory('📕 CLASS 12 – PCB', '12th-PCB', [
-                        { name: '💬┃12-pcb-chat' }, { name: '❓┃12-pcb-doubts' },
-                        { name: '🔊┃12-pcb-biology-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃12-pcb-chemistry-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃12-pcb-physics-vc', type: ChannelType.GuildVoice }
-                    ]);
-
-                    // 7. DROPPERS
-                    await createClassCategory('🔴 12th PCM DROPPER', '12th-PCM-Dropper', [
-                        { name: '💬┃pcm-drop-chat' }, { name: '❓┃pcm-drop-doubts' },
-                        { name: '🔊┃pcm-drop-physics-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃pcm-drop-chemistry-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃pcm-drop-maths-vc', type: ChannelType.GuildVoice }
-                    ]);
-                    await createClassCategory('🔴 12th PCB DROPPER', '12th-PCB-Dropper', [
-                        { name: '💬┃pcb-drop-chat' }, { name: '❓┃pcb-drop-doubts' },
-                        { name: '🔊┃pcb-drop-biology-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃pcb-drop-chemistry-vc', type: ChannelType.GuildVoice },
-                        { name: '🔊┃pcb-drop-physics-vc', type: ChannelType.GuildVoice }
-                    ]);
-
-                    // 8. CENTRAL DOUBT FORUM
-                    const catForum = await guild.channels.create({ name: '📚 CENTRAL DOUBT FORUM', type: ChannelType.GuildCategory });
-                    await guild.channels.create({
-                        name: '📖┃doubt-forum',
-                        type: ChannelType.GuildForum as any,
-                        parent: catForum.id,
-                        rateLimitPerUser: 15, // 15s slowmode
-                        reason: 'Academic doubt forum'
+                    // Apply Muted role overrides to all channels
+                    guild.channels.cache.forEach(async (channel: any) => {
+                        try {
+                            if (channel.permissionOverwrites) {
+                                await (channel as any).permissionOverwrites.create(mutedRole, {
+                                    SendMessages: false,
+                                    AddReactions: false,
+                                    Speak: false,
+                                    CreatePublicThreads: false,
+                                    CreatePrivateThreads: false,
+                                    SendMessagesInThreads: false,
+                                });
+                            }
+                        } catch (e) { }
                     });
 
-                    await setupMsg.edit('✅ **Server setup complete!** 🚀\nRoles, categories, and channels have been professionally configured.');
+                    await setupMsg.edit('✅ **Zedox HQ Setup Complete!** 🚀\nYour server has been professionally configured with roles, categories, and private staff areas.');
+                    await sendModLog(guild, 'System Setup', `Server setup completed by ${message.author.tag}`, '#00FF00');
                 } catch (err) {
                     console.error(err);
-                    await setupMsg.edit('❌ **Setup failed.** Ensure the bot has Administrator permissions and is at the top of the role list.');
+                    await setupMsg.edit('❌ **Setup failed.** Ensure I have Administrator permissions and my role is at the top.');
                 }
                 break;
 
