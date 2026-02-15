@@ -19,6 +19,8 @@ interface DBData {
     error_logging: boolean;
     dm_permissions: boolean;
     status_message: string;
+    mod_log_channel_id: string | null;
+    muted_role_id: string | null;
     features: {
       moderation: boolean;
       automod: boolean;
@@ -67,6 +69,8 @@ const defaultData: DBData = {
     error_logging: true,
     dm_permissions: true,
     status_message: 'Watching over the server',
+    mod_log_channel_id: null,
+    muted_role_id: null,
     features: {
       moderation: true,
       automod: true,
