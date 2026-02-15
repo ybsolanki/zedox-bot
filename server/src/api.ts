@@ -13,8 +13,23 @@ import { PermissionsBitField } from 'discord.js';
 
 startBot();
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Validate environment variables
+const requiredEnv = ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_TOKEN'];
+const missingEnv = requiredEnv.filter(env => !process.env[env]);
+
+if (missingEnv.length > 0) {
+    console.error('CRITICAL ERROR: Missing required environment variables:');
+    missingEnv.forEach(env => console.error(`- ${env}`));
+    console.error('\nPlease add these to your environment (or .env file) to continue.');
+    console.error('If you are deploying on Render, add them in the "Environment" tab.');
+    process.exit(1);
+}
 
 const app = express();
 const port = process.env.PORT || 3001;
