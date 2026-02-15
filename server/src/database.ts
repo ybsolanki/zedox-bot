@@ -21,6 +21,9 @@ interface DBData {
     status_message: string;
     mod_log_channel_id: string | null;
     muted_role_id: string | null;
+    ticket_category_id: string | null;
+    staff_role_id: string | null;
+    ticket_count: number;
     features: {
       moderation: boolean;
       automod: boolean;
@@ -71,6 +74,9 @@ const defaultData: DBData = {
     status_message: 'Watching over the server',
     mod_log_channel_id: null,
     muted_role_id: null,
+    ticket_category_id: null,
+    staff_role_id: null,
+    ticket_count: 0,
     features: {
       moderation: true,
       automod: true,

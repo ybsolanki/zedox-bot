@@ -171,6 +171,69 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply({ content: '❌ Role not found or error assigning role.', ephemeral: true });
         }
     }
+
+    if (interaction.customId === 'ticket_create') {
+        const guild = interaction.guild;
+        if (!guild) return;
+
+        const config = db_manager.getConfig();
+        if (!config.ticket_category_id) return interaction.reply({ content: '❌ Ticket system is not configured.', ephemeral: true });
+
+        const ticketNum = config.ticket_count + 1;
+        db_manager.updateConfig('ticket_count', ticketNum);
+
+        try {
+            const ticketChannel = await guild.channels.create({
+                name: `ticket-${ticketNum}`,
+                type: ChannelType.GuildText,
+                parent: config.ticket_category_id,
+                permissionOverwrites: [
+                    {
+                        id: guild.id,
+                        deny: [PermissionsBitField.Flags.ViewChannel],
+                    },
+                    {
+                        id: interaction.user.id,
+                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles],
+                    },
+                    config.staff_role_id ? {
+                        id: config.staff_role_id,
+                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageMessages],
+                    } : null
+                ].filter(Boolean) as any,
+            });
+
+            const embed = new EmbedBuilder()
+                .setTitle('🎫 Support Ticket')
+                .setDescription(`Hello ${interaction.user}, a member of our staff will be with you shortly.\n\nPlease describe your issue in detail.`)
+                .setColor('#5865F2')
+                .setTimestamp();
+
+            const closeButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('ticket_close')
+                    .setLabel('Close Ticket')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('🔒')
+            );
+
+            await ticketChannel.send({ content: `<@${interaction.user.id}> | <@&${config.staff_role_id}>`, embeds: [embed], components: [closeButton] });
+            await interaction.reply({ content: `✅ Ticket created! ${ticketChannel}`, ephemeral: true });
+        } catch (error) {
+            console.error(error);
+            await interaction.reply({ content: '❌ Failed to create ticket.', ephemeral: true });
+        }
+    }
+
+    if (interaction.customId === 'ticket_close') {
+        const channel = interaction.channel;
+        if (!channel || channel.type !== ChannelType.GuildText) return;
+
+        await interaction.reply('🔒 Closing ticket in 5 seconds...');
+        setTimeout(() => {
+            channel.delete().catch(() => { });
+        }, 5000);
+    }
 });
 
 const messageLog = new Map<string, number[]>();
@@ -547,6 +610,35 @@ client.on('messageCreate', async (message: Message) => {
                     await guild.channels.create({ name: '🔊┃Lounge', type: ChannelType.GuildVoice, parent: catVoice.id });
                     await guild.channels.create({ name: '🎮┃Gaming', type: ChannelType.GuildVoice, parent: catVoice.id });
 
+                    // 7. CATEGORY: TICKETS
+                    const catTickets = await guild.channels.create({ name: '🎫 TICKETS', type: ChannelType.GuildCategory });
+                    db_manager.updateConfig('ticket_category_id', catTickets.id);
+                    db_manager.updateConfig('staff_role_id', staffManagerRole.id);
+
+                    const ticketSetupChannel = await guild.channels.create({
+                        name: '🎫┃create-a-ticket',
+                        parent: catTickets.id,
+                        permissionOverwrites: [
+                            { id: everyone.id, deny: [PermissionsBitField.Flags.SendMessages] }
+                        ]
+                    });
+
+                    const ticketEmbed = new EmbedBuilder()
+                        .setTitle('🎫 Create a Support Ticket')
+                        .setDescription('Need help? Click the button below to open a private support ticket.\n\nOur staff manager and moderators will assist you as soon as possible.')
+                        .setColor('#5865F2')
+                        .setTimestamp();
+
+                    const ticketButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('ticket_create')
+                            .setLabel('Create Ticket')
+                            .setStyle(ButtonStyle.Primary)
+                            .setEmoji('🎫')
+                    );
+
+                    await (ticketSetupChannel as any).send({ embeds: [ticketEmbed], components: [ticketButton] });
+
                     // Apply Muted role overrides to all channels
                     guild.channels.cache.forEach(async (channel: any) => {
                         try {
@@ -563,12 +655,30 @@ client.on('messageCreate', async (message: Message) => {
                         } catch (e) { }
                     });
 
-                    await setupMsg.edit('✅ **Zedox HQ Setup Complete!** 🚀\nYour server has been professionally configured with roles, categories, and private staff areas.');
+                    await setupMsg.edit('✅ **Zedox HQ Setup Complete!** 🚀\nYour server has been professionally configured with roles, categories, private staff areas, and a ticket system.');
                     await sendModLog(guild, 'System Setup', `Server setup completed by ${message.author.tag}`, '#00FF00');
                 } catch (err) {
                     console.error(err);
                     await setupMsg.edit('❌ **Setup failed.** Ensure I have Administrator permissions and my role is at the top.');
                 }
+                break;
+
+            case 'ticket-setup':
+                if (!message.member?.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Admin required.');
+                const tEmbed = new EmbedBuilder()
+                    .setTitle('🎫 Create a Support Ticket')
+                    .setDescription('Click the button below to open a support ticket.')
+                    .setColor('#5865F2');
+
+                const tRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('ticket_create')
+                        .setLabel('Create Ticket')
+                        .setStyle(ButtonStyle.Primary)
+                        .setEmoji('🎫')
+                );
+
+                await (message.channel as any).send({ embeds: [tEmbed], components: [tRow] });
                 break;
 
             case 'help':
