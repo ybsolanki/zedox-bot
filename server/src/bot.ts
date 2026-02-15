@@ -79,6 +79,49 @@ client.once('ready', () => {
     }, 60000);
 });
 
+// Welcome Messages System
+client.on('guildMemberAdd', async (member) => {
+    const welcomeConfig = db_manager.getWelcomeConfig();
+    if (!welcomeConfig.enabled || !welcomeConfig.channel_id) return;
+
+    const channel = member.guild.channels.cache.get(welcomeConfig.channel_id);
+    if (!channel || channel.type !== ChannelType.GuildText) return;
+
+    const config = welcomeConfig.embed;
+
+    // Placeholder replacement
+    const replacePlaceholders = (text: string) => {
+        if (!text) return '';
+        return text
+            .replace(/{server}/g, member.guild.name)
+            .replace(/{mention}/g, `<@${member.id}>`)
+            .replace(/{user}/g, member.user.tag)
+            .replace(/{memberCount}/g, member.guild.memberCount.toString());
+    };
+
+    const embed = new EmbedBuilder()
+        .setTitle(replacePlaceholders(config.title))
+        .setDescription(replacePlaceholders(config.description))
+        .setColor(config.color as any)
+        .setFooter({ text: replacePlaceholders(config.footer) });
+
+    // Handle thumbnail
+    if (config.thumbnail === 'user_avatar') {
+        embed.setThumbnail(member.user.displayAvatarURL());
+    } else if (config.thumbnail === 'server_icon') {
+        embed.setThumbnail(member.guild.iconURL());
+    } else if (config.thumbnail === 'custom_url' && config.thumbnail_url) {
+        embed.setThumbnail(config.thumbnail_url);
+    }
+
+    // Handle main image
+    if (config.image) {
+        embed.setImage(config.image);
+    }
+
+    await (channel as any).send({ content: `<@${member.id}>`, embeds: [embed] }).catch(console.error);
+});
+
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
@@ -110,10 +153,56 @@ client.on('interactionCreate', async (interaction) => {
 
 const messageLog = new Map<string, number[]>();
 
+// Profanity filter logic
+const checkProfanity = (content: string, bannedWords: string[]): boolean => {
+    const lowerContent = content.toLowerCase();
+    // Match whole words or common variations
+    return bannedWords.some(word => {
+        const regex = new RegExp(`\\b${word.toLowerCase()}\\b`, 'i');
+        return regex.test(lowerContent);
+    });
+};
+
 client.on('messageCreate', async (message: Message) => {
     if (message.author.bot || !message.guild) return;
 
     const config = db_manager.getConfig();
+    const automodConfig = db_manager.getAutoModConfig();
+
+    // Auto-Mod: Content Filter
+    if (automodConfig.enabled) {
+        if (checkProfanity(message.content, automodConfig.banned_words)) {
+            if (automodConfig.delete_messages) {
+                await message.delete().catch(() => { });
+            }
+
+            db_manager.addViolation(message.author.id, message.guild.id, 'Profanity/Banned Word', message.content);
+
+            if (automodConfig.warn_on_violation) {
+                db_manager.addWarning(message.author.id, message.guild.id, 'Usage of banned words');
+
+                const userWarnings = db_manager.getUserWarnings(message.author.id, automodConfig.warning_expiry_hours);
+
+                if (userWarnings.length >= automodConfig.warnings_before_mute) {
+                    if (automodConfig.mute_on_violation || true) { // Default to timeout for now
+                        const member = await message.guild.members.fetch(message.author.id).catch(() => null);
+                        if (member) {
+                            const muteMs = automodConfig.mute_duration_minutes * 60000;
+                            await member.timeout(muteMs, 'Auto-Mod: Repeated violations').catch(console.error);
+                            const expiresAt = new Date(Date.now() + muteMs).toISOString();
+                            db_manager.addMute(message.author.id, message.guild.id, expiresAt);
+
+                            await (message.channel as any).send(`🔇 ${message.author} has been muted for ${automodConfig.mute_duration_minutes} minutes due to repeated violations.`);
+                        }
+                    }
+                } else {
+                    const warnMsg = await (message.channel as any).send(`⚠️ ${message.author}, please watch your language! Warning (${userWarnings.length}/${automodConfig.warnings_before_mute})`);
+                    setTimeout(() => warnMsg.delete().catch(() => { }), 5000);
+                }
+            }
+            return;
+        }
+    }
 
     // Auto-Mod: Anti-Spam
     if (config.features?.automod) {

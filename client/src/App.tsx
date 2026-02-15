@@ -61,6 +61,9 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('overview');
     const [stats, setStats] = useState({ uptime: 0, guilds: 0, users: 0, commandsRun: 0 });
     const [config, setConfig] = useState<any>({ prefix: ',', error_logging: true, status_message: '', features: {} });
+    const [automodConfig, setAutomodConfig] = useState<any>({ enabled: false, banned_words: [], warn_on_violation: true, warnings_before_mute: 3, mute_duration_minutes: 10, delete_messages: true });
+    const [welcomeConfig, setWelcomeConfig] = useState<any>({ enabled: false, channel_id: null, embed: { title: '', description: '', color: '#5865F2', footer: '' } });
+    const [violations, setViolations] = useState<any[]>([]);
     const [logs, setLogs] = useState<any[]>([]);
 
     useEffect(() => {
@@ -81,6 +84,24 @@ export default function App() {
                     setIsAuthenticated(false);
                     if (token) setLoginError('Invalid Token! Please check your Render environment variables.');
                 }
+
+                // Fetch Auto-Mod Config
+                const automodRes = await fetch('/api/automod', {
+                    headers: { 'Authorization': token }
+                });
+                if (automodRes.ok) setAutomodConfig(await automodRes.json());
+
+                // Fetch Welcome Config
+                const welcomeRes = await fetch('/api/welcome', {
+                    headers: { 'Authorization': token }
+                });
+                if (welcomeRes.ok) setWelcomeConfig(await welcomeRes.json());
+
+                // Fetch Violations
+                const violationsRes = await fetch('/api/violations', {
+                    headers: { 'Authorization': token }
+                });
+                if (violationsRes.ok) setViolations(await violationsRes.json());
 
                 const statsRes = await fetch('/api/stats', {
                     headers: { 'Authorization': token }
@@ -184,6 +205,40 @@ export default function App() {
         }
     };
 
+    const handleUpdateAutomod = async (updates: any) => {
+        try {
+            const newConfig = { ...automodConfig, ...updates };
+            setAutomodConfig(newConfig);
+            await fetch('/api/automod', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token
+                },
+                body: JSON.stringify(newConfig)
+            });
+        } catch (err) {
+            console.error('Automod update failed', err);
+        }
+    };
+
+    const handleUpdateWelcome = async (updates: any) => {
+        try {
+            const newConfig = { ...welcomeConfig, ...updates };
+            setWelcomeConfig(newConfig);
+            await fetch('/api/welcome', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token
+                },
+                body: JSON.stringify(newConfig)
+            });
+        } catch (err) {
+            console.error('Welcome update failed', err);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-background text-text flex">
             {!isAuthenticated ? (
@@ -268,6 +323,24 @@ export default function App() {
                                 )}
                             >
                                 <Hammer size={20} /> Moderation
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('automod')}
+                                className={cn(
+                                    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+                                    activeTab === 'automod' ? "bg-primary text-white" : "text-white/50 hover:bg-white/5"
+                                )}
+                            >
+                                <ShieldCheck size={20} /> Auto-Mod
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('welcome')}
+                                className={cn(
+                                    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+                                    activeTab === 'welcome' ? "bg-primary text-white" : "text-white/50 hover:bg-white/5"
+                                )}
+                            >
+                                <UserPlus size={20} /> Welcome msg
                             </button>
                             <button
                                 onClick={() => setActiveTab('settings')}
@@ -438,6 +511,192 @@ export default function App() {
                                     active={config.features?.music}
                                     onToggle={(v: boolean) => handleUpdateConfig('features.music', v)}
                                 />
+                            </div>
+                        )}
+
+                        {activeTab === 'automod' && (
+                            <div className="space-y-8">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    <section className="bg-surface p-8 rounded-3xl border border-white/5 space-y-6">
+                                        <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                            <ShieldCheck size={22} className="text-primary" /> Core Settings
+                                        </h2>
+
+                                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+                                            <div>
+                                                <div className="text-white font-bold">Enable Filter</div>
+                                                <div className="text-sm text-white/40">Enable or disable word filtering.</div>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only peer"
+                                                    checked={automodConfig.enabled}
+                                                    onChange={(e) => handleUpdateAutomod({ enabled: e.target.checked })}
+                                                />
+                                                <div className="w-14 h-7 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                            </label>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Banned Words (comma separated)</label>
+                                            <textarea
+                                                value={automodConfig.banned_words.join(', ')}
+                                                onChange={(e) => handleUpdateAutomod({ banned_words: e.target.value.split(',').map(s => s.trim()).filter(s => s) })}
+                                                rows={4}
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-white focus:outline-none focus:border-primary transition-all font-mono text-sm"
+                                                placeholder="badword1, badword2..."
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="p-4 bg-white/5 rounded-2xl">
+                                                <div className="text-sm font-bold text-white/40 uppercase mb-2">Warn Limit</div>
+                                                <input
+                                                    type="number"
+                                                    value={automodConfig.warnings_before_mute}
+                                                    onChange={(e) => handleUpdateAutomod({ warnings_before_mute: parseInt(e.target.value) })}
+                                                    className="w-full bg-transparent text-white font-bold text-xl focus:outline-none"
+                                                />
+                                            </div>
+                                            <div className="p-4 bg-white/5 rounded-2xl">
+                                                <div className="text-sm font-bold text-white/40 uppercase mb-2">Mute (Min)</div>
+                                                <input
+                                                    type="number"
+                                                    value={automodConfig.mute_duration_minutes}
+                                                    onChange={(e) => handleUpdateAutomod({ mute_duration_minutes: parseInt(e.target.value) })}
+                                                    className="w-full bg-transparent text-white font-bold text-xl focus:outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="bg-surface p-8 rounded-3xl border border-white/5">
+                                        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                            <Activity size={22} className="text-red-400" /> Recent Violations
+                                        </h2>
+                                        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                                            {violations.length > 0 ? violations.map((v: any) => (
+                                                <div key={v.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-red-500/30 transition-all">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-red-400 text-xs font-bold uppercase">{v.reason}</span>
+                                                        <span className="text-white/20 text-xs">{formatTimeAgo(v.timestamp)}</span>
+                                                    </div>
+                                                    <div className="text-white font-medium mb-1 truncate">User ID: <span className="text-white/60">{v.user_id}</span></div>
+                                                    <div className="text-sm text-white/40 bg-black/20 p-2 rounded-lg italic break-all">"{v.content}"</div>
+                                                </div>
+                                            )) : (
+                                                <div className="p-12 text-center text-white/20 font-bold uppercase tracking-widest">Clean Environment</div>
+                                            )}
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'welcome' && (
+                            <div className="max-w-4xl space-y-8">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    <section className="bg-surface p-8 rounded-3xl border border-white/5 space-y-6">
+                                        <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                            <Zap size={22} className="text-primary" /> Configuration
+                                        </h2>
+
+                                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+                                            <div>
+                                                <div className="text-white font-bold">Enable Greetings</div>
+                                                <div className="text-sm text-white/40">Greet new users with a message.</div>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only peer"
+                                                    checked={welcomeConfig.enabled}
+                                                    onChange={(e) => handleUpdateWelcome({ enabled: e.target.checked })}
+                                                />
+                                                <div className="w-14 h-7 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                            </label>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Welcome Channel ID</label>
+                                            <input
+                                                type="text"
+                                                value={welcomeConfig.channel_id || ''}
+                                                onChange={(e) => handleUpdateWelcome({ channel_id: e.target.value })}
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all"
+                                                placeholder="1234567890..."
+                                            />
+                                        </div>
+
+                                        <div className="pt-6 border-t border-white/5 space-y-4">
+                                            <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest">Embed Designer</h3>
+
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold text-white/30 ml-1">Title</label>
+                                                <input
+                                                    type="text"
+                                                    value={welcomeConfig.embed.title}
+                                                    onChange={(e) => handleUpdateWelcome({ embed: { ...welcomeConfig.embed, title: e.target.value } })}
+                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold text-white/30 ml-1">Description</label>
+                                                <textarea
+                                                    value={welcomeConfig.embed.description}
+                                                    onChange={(e) => handleUpdateWelcome({ embed: { ...welcomeConfig.embed, description: e.target.value } })}
+                                                    rows={3}
+                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all"
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold text-white/30 ml-1">Color (Hex)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={welcomeConfig.embed.color}
+                                                        onChange={(e) => handleUpdateWelcome({ embed: { ...welcomeConfig.embed, color: e.target.value } })}
+                                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold text-white/30 ml-1">Footer</label>
+                                                    <input
+                                                        type="text"
+                                                        value={welcomeConfig.embed.footer}
+                                                        onChange={(e) => handleUpdateWelcome({ embed: { ...welcomeConfig.embed, footer: e.target.value } })}
+                                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="bg-[#2B2D31] p-8 rounded-3xl border border-white/5 self-start">
+                                        <h2 className="text-xs font-bold text-white/20 uppercase tracking-[0.2em] mb-6">Discord Preview</h2>
+                                        <div className="flex gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-primary/20 flex-shrink-0" />
+                                            <div className="flex-1 space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-white font-bold">Zedox</span>
+                                                    <span className="bg-primary text-[10px] px-1 rounded-sm text-white font-bold uppercase">Bot</span>
+                                                    <span className="text-white/20 text-xs">Today at 12:00 PM</span>
+                                                </div>
+                                                <div className="text-[#DBDEE1] text-sm">
+                                                    Hey <span className="text-[#00A8FC] bg-[#00A8FC]/10 px-0.5 rounded-sm cursor-pointer hover:bg-[#00A8FC]/20 transition-all">@User</span>, welcome!
+                                                </div>
+                                                <div className="border-l-4 rounded-sm p-4 bg-[#232428] space-y-2 max-w-[400px]" style={{ borderColor: welcomeConfig.embed.color }}>
+                                                    <div className="font-bold text-white">{(welcomeConfig.embed.title || '').replace(/{server}/g, 'Zedox Server')}</div>
+                                                    <div className="text-sm text-[#DBDEE1] whitespace-pre-wrap">{(welcomeConfig.embed.description || '').replace(/{mention}/g, '@User').replace(/{server}/g, 'Zedox Server')}</div>
+                                                    <div className="text-[10px] text-white/40 font-medium">{(welcomeConfig.embed.footer || '').replace(/{memberCount}/g, '123')}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
                             </div>
                         )}
 
