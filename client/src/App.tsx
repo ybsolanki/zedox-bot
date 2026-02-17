@@ -230,7 +230,7 @@ export default function App() {
                             onClick={handleLogin}
                             className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#5865F2]/20 transition-all flex items-center justify-center gap-3 group"
                         >
-                            <img src="https://assets-global.website-files.com/6257adef93867e3ed1449492/6257adef93867e611844955b_White%20Logo.svg" alt="Discord" className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                            <img src="https://cdn.prod.website-files.com/6257adef93867e3ed1449492/6257adef93867e611844955b_White%20Logo.svg" alt="Discord" className="w-6 h-6 group-hover:scale-110 transition-transform" />
                             Login with Discord
                         </button>
                     </div>

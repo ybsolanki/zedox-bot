@@ -20,7 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Validate environment variables
-const requiredEnv = ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_TOKEN'];
+const requiredEnv = ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_BOT_TOKEN'];
 const missingEnv = requiredEnv.filter(env => !process.env[env]);
 
 if (missingEnv.length > 0) {
@@ -32,8 +32,11 @@ if (missingEnv.length > 0) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Required for Render/Proxies to handle HTTPS correctly
 const port = process.env.PORT || 3001;
 const JWT_SECRET = process.env.DASHBOARD_TOKEN || 'zedox-secret-key';
+const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN; // Unified name
+const CALLBACK_URL = process.env.CALLBACK_URL || '/auth/callback';
 
 app.use(cors({
     origin: true,
@@ -59,7 +62,7 @@ passport.deserializeUser((id: string, done) => {
 passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID || '',
     clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
-    callbackURL: '/auth/callback',
+    callbackURL: CALLBACK_URL,
     scope: ['identify', 'guilds']
 }, (accessToken, refreshToken, profile, done) => {
     db_manager.upsertUser(profile.id, accessToken, refreshToken, profile);
