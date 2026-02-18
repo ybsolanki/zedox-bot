@@ -412,7 +412,7 @@ client.on('messageCreate', async (message: Message) => {
                 if (isNaN(amount) || amount < 1 || amount > 100) return message.reply('❌ Provide a number between 1 and 100.');
                 await message.channel.messages.fetch({ limit: amount + 1 }).then(async messages => {
                     await (message.channel as any).bulkDelete(messages);
-                    const delMsg = await message.channel.send(`✅ Deleted **${amount}** messages.`);
+                    const delMsg = await (message.channel as any).send(`✅ Deleted **${amount}** messages.`);
                     setTimeout(() => delMsg.delete().catch(() => { }), 3000);
                 });
                 break;
@@ -911,7 +911,7 @@ client.on('messageCreate', async (message: Message) => {
                         .setColor('#FF0000')
                         .setTimestamp();
 
-                    await newChannel.send({ embeds: [nukeEmbed] });
+                    await (newChannel as any).send({ embeds: [nukeEmbed] });
                 } catch (err) {
                     console.error(err);
                     await message.reply('❌ Failed to nuke channel.');
