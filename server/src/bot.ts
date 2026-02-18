@@ -324,9 +324,23 @@ client.on('messageCreate', async (message: Message) => {
     if (!message.content.startsWith(prefix)) return;
 
     const args = message.content.slice(prefix.length).trim().split(/ +/);
-    const commandName = args.shift()?.toLowerCase();
+    const rawCommandName = args.shift()?.toLowerCase();
 
-    if (!commandName) return;
+    if (!rawCommandName) return;
+
+    // Command aliases mapping
+    const aliases: { [key: string]: string } = {
+        'si': 'serverinfo',
+        'serverinformation': 'serverinfo',
+        'ui': 'userinfo',
+        'p': 'play',
+        's': 'skip',
+        'q': 'queue',
+        'purge': 'clear',
+        'h': 'help'
+    };
+
+    const commandName = aliases[rawCommandName] || rawCommandName;
 
     try {
         // Command handler logic
@@ -396,8 +410,10 @@ client.on('messageCreate', async (message: Message) => {
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply('❌ Insufficient permissions.');
                 const amount = parseInt(args[0]);
                 if (isNaN(amount) || amount < 1 || amount > 100) return message.reply('❌ Provide a number between 1 and 100.');
-                await message.channel.messages.fetch({ limit: amount + 1 }).then(messages => {
-                    (message.channel as any).bulkDelete(messages);
+                await message.channel.messages.fetch({ limit: amount + 1 }).then(async messages => {
+                    await (message.channel as any).bulkDelete(messages);
+                    const delMsg = await message.channel.send(`✅ Deleted **${amount}** messages.`);
+                    setTimeout(() => delMsg.delete().catch(() => { }), 3000);
                 });
                 break;
 
@@ -685,13 +701,14 @@ client.on('messageCreate', async (message: Message) => {
                 const helpEmbed = new EmbedBuilder()
                     .setTitle('Zedox Bot Commands')
                     .setColor('#5865F2')
-                    .setDescription(`Current prefix is \`${prefix}\``)
+                    .setDescription(`Current prefix is \`${prefix}\` (Case-insensitive)`)
                     .addFields(
-                        { name: 'Moderation (11)', value: '`kick`, `ban`, `clear`, `mute`, `unmute`, `deafen`, `undeafen`, `lockdown`, `unlock`, `textmute`, `slowmode`' },
-                        { name: 'Music (4)', value: '`play`, `skip`, `stop`, `queue`' },
-                        { name: 'Utility & Info (7)', value: '`userinfo`, `serverinfo`, `invite`, `prefix`, `debug`, `ping`, `uptime`' },
-                        { name: 'Other', value: '`help`' }
-                    );
+                        { name: '🛡️ Moderation', value: '`kick`, `ban`, `clear`, `mute`, `unmute`, `deafen`, `undeafen`, `lockdown`, `unlock`, `textmute`, `slowmode`, `nuke`' },
+                        { name: '🎶 Music', value: '`play`, `skip`, `stop`, `queue`' },
+                        { name: '🛠️ Utility & Info', value: '`userinfo`, `serverinfo`, `invite`, `prefix`, `debug`, `ping`, `uptime`, `role`' },
+                        { name: '✨ Other', value: '`help`' }
+                    )
+                    .setFooter({ text: 'Tip: You can use short forms like ,si ,ui ,p ,s ,q ,purge etc.' });
                 await (message.channel as any).send({ embeds: [helpEmbed] });
                 break;
 
@@ -843,6 +860,61 @@ client.on('messageCreate', async (message: Message) => {
                     await sendModLog(message.guild, 'System Setup', `Muted role created and configured by ${message.author.tag}`, '#00FF00');
                 } catch (error) {
                     await message.reply('❌ Failed to create role. Check my permissions.');
+                }
+                break;
+
+            case 'role':
+                if (!message.member?.permissions.has(PermissionsBitField.Flags.ManageRoles)) return message.reply('❌ Insufficient permissions.');
+                const subCommand = args[0]?.toLowerCase();
+                const roleMember = message.mentions.members?.first();
+                const roleToProcess = message.mentions.roles.first() || message.guild.roles.cache.get(args[2]);
+
+                if (!subCommand || !['add', 'remove'].includes(subCommand) || !roleMember || !roleToProcess) {
+                    return message.reply(`❌ Usage: \`${prefix}role add/remove @member @role\``);
+                }
+
+                if (message.member.roles.highest.position <= roleToProcess.position && message.author.id !== message.guild.ownerId) {
+                    return message.reply('❌ You cannot manage a role higher than or equal to your highest role.');
+                }
+
+                try {
+                    if (subCommand === 'add') {
+                        await roleMember.roles.add(roleToProcess);
+                        await message.reply(`✅ Added role **${roleToProcess.name}** to ${roleMember.user.tag}.`);
+                    } else {
+                        await roleMember.roles.remove(roleToProcess);
+                        await message.reply(`✅ Removed role **${roleToProcess.name}** from ${roleMember.user.tag}.`);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    await message.reply('❌ Failed to update roles. Make sure my role is above the target role.');
+                }
+                break;
+
+            case 'nuke':
+                if (!message.member?.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ Insufficient permissions.');
+                if (message.channel.type === ChannelType.DM) return;
+
+                const originalChannel = message.channel as any;
+                const position = originalChannel.position;
+
+                try {
+                    const newChannel = await originalChannel.clone({
+                        reason: `Nuked by ${message.author.tag}`
+                    });
+                    await newChannel.setPosition(position);
+                    await originalChannel.delete();
+
+                    const nukeEmbed = new EmbedBuilder()
+                        .setTitle('💥 Channel Nuked!')
+                        .setImage('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2FiamZxeXp6Ym85eWllbXp4eW54eW54eW54eW54eW54eW54eW54JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/HhTXt43pk1I1W/giphy.gif')
+                        .setColor('#FF0000')
+                        .setTimestamp();
+
+                    await newChannel.send({ embeds: [nukeEmbed] });
+                } catch (err) {
+                    console.error(err);
+                    await message.reply('❌ Failed to nuke channel.');
                 }
                 break;
 
