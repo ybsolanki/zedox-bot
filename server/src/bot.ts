@@ -539,30 +539,39 @@ client.on('messageCreate', async (message: Message) => {
             case 'whitelist':
                 if (!message.member?.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Administrator role is required.');
                 const action = args[0]?.toLowerCase();
-                const type = args[1]?.toLowerCase();
-                const targetId = message.mentions.users.first()?.id || message.mentions.roles.first()?.id || args[2];
+                const mentionedUser = message.mentions.users.first();
+                const mentionedRole = message.mentions.roles.first();
+                const targetId = mentionedUser?.id || mentionedRole?.id || args[1];
 
                 if (!action || !['add', 'remove', 'list'].includes(action)) {
-                    return message.reply(`❌ Usage: \`${prefix}whitelist <add|remove|list> <role|member> <@user|@role|ID>\``);
+                    return message.reply(`❌ Usage: \`${prefix}whitelist <add|remove|list> <@user|@role|ID>\``);
                 }
 
                 if (action === 'list') {
                     const wEmbed = new EmbedBuilder()
                         .setTitle('🛡️ Auto-Mod Whitelist')
                         .addFields(
-                            { name: 'Whitelisted Roles', value: automodConfig.whitelist_roles?.length > 0 ? automodConfig.whitelist_roles.map((id: string) => `<@&${id}>`).join(', ') : 'None' },
-                            { name: 'Whitelisted Members', value: automodConfig.whitelist_members?.length > 0 ? automodConfig.whitelist_members.map((id: string) => `<@${id}>`).join(', ') : 'None' }
+                            { name: 'Whitelisted Roles', value: (automodConfig?.whitelist_roles || []).length > 0 ? (automodConfig?.whitelist_roles || []).map((id: string) => `<@&${id}>`).join(', ') : 'None' },
+                            { name: 'Whitelisted Members', value: (automodConfig?.whitelist_members || []).length > 0 ? (automodConfig?.whitelist_members || []).map((id: string) => `<@${id}>`).join(', ') : 'None' }
                         )
                         .setColor('#5865F2');
                     return (message.channel as any).send({ embeds: [wEmbed] });
                 }
 
-                if (!type || !['role', 'member', 'user'].includes(type) || !targetId) {
-                    return message.reply(`❌ Usage: \`${prefix}whitelist ${action} <role|member> <@user|@role|ID>\``);
+                if (!targetId) {
+                    return message.reply(`❌ Usage: \`${prefix}whitelist ${action} <@user|@role|ID>\``);
+                }
+
+                // Determine type: check mentions first, then fallback to current data for IDs
+                let type: 'role' | 'member' = mentionedRole ? 'role' : 'member';
+                if (!mentionedRole && !mentionedUser && targetId) {
+                    // If it's an ID, try to determine if it's a role or member in the guild
+                    const isRole = message.guild.roles.cache.has(targetId);
+                    type = isRole ? 'role' : 'member';
                 }
 
                 const field = (type === 'role') ? 'whitelist_roles' : 'whitelist_members';
-                const currentWhitelist = automodConfig[field] || [];
+                const currentWhitelist = (automodConfig as any)[field] || [];
 
                 if (action === 'add') {
                     if (currentWhitelist.includes(targetId)) return message.reply('❌ Already whitelisted.');

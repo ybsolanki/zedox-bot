@@ -207,7 +207,10 @@ export const db_manager = {
   },
 
   // Auto-Mod Methods
-  getAutoModConfig: (guildId: string) => getGuildData(readDB(), guildId).automod_config,
+  getAutoModConfig: (guildId: string) => {
+    const guildData = getGuildData(readDB(), guildId);
+    return { ...defaultGuildData.automod_config, ...guildData.automod_config };
+  },
   updateAutoModConfig: (guildId: string, updates: Partial<GuildConfig['automod_config']>) => {
     const data = readDB();
     const guildData = getGuildData(data, guildId);

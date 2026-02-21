@@ -105,6 +105,12 @@ export default function App() {
     useEffect(() => {
         if (!selectedGuild) return;
 
+        // Reset states to defaults/empty while fetching new guild data
+        setAutomodConfig({ enabled: false, banned_words: [], warn_on_violation: true, warnings_before_mute: 3, mute_duration_minutes: 10, delete_messages: true, whitelist_roles: [], whitelist_members: [] });
+        setWelcomeConfig({ enabled: false, channel_id: null, embed: { title: '', description: '', color: '#5865F2', footer: '' } });
+        setViolations([]);
+        setLogs([]);
+
         const fetchData = async () => {
             try {
                 const guildId = selectedGuild.id;
@@ -545,7 +551,7 @@ export default function App() {
                                         <div className="space-y-4">
                                             <label className="text-sm font-bold text-white/40 uppercase tracking-widest">Banned Words (comma separated)</label>
                                             <textarea
-                                                value={automodConfig.banned_words.join(', ')}
+                                                value={(automodConfig?.banned_words || []).join(', ')}
                                                 onChange={(e) => handleUpdateAutomod({ banned_words: e.target.value.split(',').map(s => s.trim()).filter(s => s) })}
                                                 rows={4}
                                                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-white focus:outline-none focus:border-primary transition-all font-mono text-sm"
@@ -631,14 +637,14 @@ export default function App() {
                                             <select
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all appearance-none cursor-pointer"
                                                 onChange={(e) => {
-                                                    if (e.target.value && !automodConfig.whitelist_roles.includes(e.target.value)) {
-                                                        handleUpdateAutomod({ whitelist_roles: [...automodConfig.whitelist_roles, e.target.value] });
+                                                    if (e.target.value && !(automodConfig?.whitelist_roles || []).includes(e.target.value)) {
+                                                        handleUpdateAutomod({ whitelist_roles: [...(automodConfig?.whitelist_roles || []), e.target.value] });
                                                     }
                                                     e.target.value = "";
                                                 }}
                                             >
                                                 <option value="" className="bg-surface text-white">Add a role to whitelist...</option>
-                                                {guildRoles.filter((r: any) => !automodConfig.whitelist_roles?.includes(r.id)).map((role: any) => (
+                                                {(guildRoles || []).filter((r: any) => !(automodConfig?.whitelist_roles || []).includes(r.id)).map((role: any) => (
                                                     <option key={role.id} value={role.id} className="bg-surface text-white">{role.name}</option>
                                                 ))}
                                             </select>
@@ -668,14 +674,14 @@ export default function App() {
                                             <select
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all appearance-none cursor-pointer"
                                                 onChange={(e) => {
-                                                    if (e.target.value && !automodConfig.whitelist_members.includes(e.target.value)) {
-                                                        handleUpdateAutomod({ whitelist_members: [...automodConfig.whitelist_members, e.target.value] });
+                                                    if (e.target.value && !(automodConfig?.whitelist_members || []).includes(e.target.value)) {
+                                                        handleUpdateAutomod({ whitelist_members: [...(automodConfig?.whitelist_members || []), e.target.value] });
                                                     }
                                                     e.target.value = "";
                                                 }}
                                             >
                                                 <option value="" className="bg-surface text-white">Add a member to whitelist...</option>
-                                                {guildMembers.filter((m: any) => !automodConfig.whitelist_members?.includes(m.id)).map((member: any) => (
+                                                {(guildMembers || []).filter((m: any) => !(automodConfig?.whitelist_members || []).includes(m.id)).map((member: any) => (
                                                     <option key={member.id} value={member.id} className="bg-surface text-white">{member.displayName} (@{member.username})</option>
                                                 ))}
                                             </select>
