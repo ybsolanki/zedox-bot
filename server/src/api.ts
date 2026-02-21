@@ -218,6 +218,39 @@ app.post('/api/config/:guildId', authenticateJWT, checkGuildAccess, (req, res) =
     }
 });
 
+app.get('/api/roles/:guildId', authenticateJWT, checkGuildAccess, (req, res) => {
+    const { guildId } = req.params;
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+    const roles = guild.roles.cache.map(r => ({
+        id: r.id,
+        name: r.name,
+        color: r.hexColor
+    })).filter(r => r.name !== '@everyone').sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json(roles);
+});
+
+app.get('/api/members/:guildId', authenticateJWT, checkGuildAccess, async (req, res) => {
+    const { guildId } = req.params;
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+    try {
+        const members = await guild.members.fetch();
+        const mappedMembers = members.map(m => ({
+            id: m.id,
+            username: m.user.username,
+            displayName: m.displayName,
+            avatar: m.user.displayAvatarURL()
+        })).sort((a, b) => a.displayName.localeCompare(b.displayName));
+        res.json(mappedMembers);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch members' });
+    }
+});
+
 // All other GET requests return the React app
 app.get('*', (req, res) => {
     res.sendFile(path.join(clientPath, 'index.html'));

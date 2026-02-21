@@ -10,7 +10,9 @@ import {
     LogOut,
     Moon,
     Zap,
-    Hammer
+    Hammer,
+    Plus,
+    X
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -60,10 +62,12 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('overview');
     const [stats, setStats] = useState({ uptime: 0, guilds: 0, users: 0, commandsRun: 0 });
     const [config, setConfig] = useState<any>({ prefix: ',', error_logging: true, status_message: '', features: {} });
-    const [automodConfig, setAutomodConfig] = useState<any>({ enabled: false, banned_words: [], warn_on_violation: true, warnings_before_mute: 3, mute_duration_minutes: 10, delete_messages: true });
+    const [automodConfig, setAutomodConfig] = useState<any>({ enabled: false, banned_words: [], warn_on_violation: true, warnings_before_mute: 3, mute_duration_minutes: 10, delete_messages: true, whitelist_roles: [], whitelist_members: [] });
     const [welcomeConfig, setWelcomeConfig] = useState<any>({ enabled: false, channel_id: null, embed: { title: '', description: '', color: '#5865F2', footer: '' } });
     const [violations, setViolations] = useState<any[]>([]);
     const [logs, setLogs] = useState<any[]>([]);
+    const [guildRoles, setGuildRoles] = useState<any[]>([]);
+    const [guildMembers, setGuildMembers] = useState<any[]>([]);
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -131,6 +135,13 @@ export default function App() {
         const interval = setInterval(fetchData, 10000);
         return () => clearInterval(interval);
     }, [selectedGuild]);
+
+    useEffect(() => {
+        if (activeTab === 'automod' && selectedGuild) {
+            fetch(`/api/roles/${selectedGuild.id}`).then(res => res.json()).then(setGuildRoles).catch(console.error);
+            fetch(`/api/members/${selectedGuild.id}`).then(res => res.json()).then(setGuildMembers).catch(console.error);
+        }
+    }, [activeTab, selectedGuild]);
 
     const handleLogin = () => {
         window.location.href = '/auth/discord';
@@ -584,6 +595,93 @@ export default function App() {
                                         </div>
                                     </section>
                                 </div>
+
+                                <section className="bg-surface p-8 rounded-3xl border border-white/5 space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
+                                                <ShieldCheck size={22} className="text-primary" /> Whitelist
+                                            </h2>
+                                            <p className="text-white/40 text-sm">Selected roles and members are immune from all auto-mod and spam filters.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                                        {/* Roles Whitelist */}
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest">Whitelisted Roles</h3>
+                                            <div className="flex flex-wrap gap-2 min-h-[40px] p-4 bg-black/20 rounded-2xl border border-white/5">
+                                                {automodConfig.whitelist_roles?.length > 0 ? automodConfig.whitelist_roles.map((roleId: string) => {
+                                                    const role = guildRoles.find((r: any) => r.id === roleId);
+                                                    return (
+                                                        <div key={roleId} className="flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-xl border border-primary/20 group animate-in fade-in zoom-in duration-200">
+                                                            <span className="text-sm font-bold">{role?.name || 'Loading...'}</span>
+                                                            <button
+                                                                onClick={() => handleUpdateAutomod({ whitelist_roles: automodConfig.whitelist_roles.filter((id: string) => id !== roleId) })}
+                                                                className="hover:text-red-400 transition-colors"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                }) : (
+                                                    <span className="text-white/20 text-sm font-medium italic">No roles whitelisted</span>
+                                                )}
+                                            </div>
+                                            <select
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all appearance-none cursor-pointer"
+                                                onChange={(e) => {
+                                                    if (e.target.value && !automodConfig.whitelist_roles.includes(e.target.value)) {
+                                                        handleUpdateAutomod({ whitelist_roles: [...automodConfig.whitelist_roles, e.target.value] });
+                                                    }
+                                                    e.target.value = "";
+                                                }}
+                                            >
+                                                <option value="" className="bg-surface text-white">Add a role to whitelist...</option>
+                                                {guildRoles.filter((r: any) => !automodConfig.whitelist_roles?.includes(r.id)).map((role: any) => (
+                                                    <option key={role.id} value={role.id} className="bg-surface text-white">{role.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Members Whitelist */}
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-bold text-white/40 uppercase tracking-widest">Whitelisted Members</h3>
+                                            <div className="flex flex-wrap gap-2 min-h-[40px] p-4 bg-black/20 rounded-2xl border border-white/5">
+                                                {automodConfig.whitelist_members?.length > 0 ? automodConfig.whitelist_members.map((userId: string) => {
+                                                    const member = guildMembers.find((m: any) => m.id === userId);
+                                                    return (
+                                                        <div key={userId} className="flex items-center gap-2 bg-accent/10 text-accent px-3 py-1.5 rounded-xl border border-accent/20 group animate-in fade-in zoom-in duration-200">
+                                                            <span className="text-sm font-bold">{member?.displayName || 'Loading...'}</span>
+                                                            <button
+                                                                onClick={() => handleUpdateAutomod({ whitelist_members: automodConfig.whitelist_members.filter((id: string) => id !== userId) })}
+                                                                className="hover:text-red-400 transition-colors"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                }) : (
+                                                    <span className="text-white/20 text-sm font-medium italic">No members whitelisted</span>
+                                                )}
+                                            </div>
+                                            <select
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-all appearance-none cursor-pointer"
+                                                onChange={(e) => {
+                                                    if (e.target.value && !automodConfig.whitelist_members.includes(e.target.value)) {
+                                                        handleUpdateAutomod({ whitelist_members: [...automodConfig.whitelist_members, e.target.value] });
+                                                    }
+                                                    e.target.value = "";
+                                                }}
+                                            >
+                                                <option value="" className="bg-surface text-white">Add a member to whitelist...</option>
+                                                {guildMembers.filter((m: any) => !automodConfig.whitelist_members?.includes(m.id)).map((member: any) => (
+                                                    <option key={member.id} value={member.id} className="bg-surface text-white">{member.displayName} (@{member.username})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </section>
                             </div>
                         )}
 

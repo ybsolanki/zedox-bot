@@ -46,6 +46,8 @@ interface GuildConfig {
     warning_expiry_hours: number;
     mute_duration_minutes: number;
     delete_messages: boolean;
+    whitelist_roles: string[];
+    whitelist_members: string[];
   };
   welcome_config: {
     enabled: boolean;
@@ -103,7 +105,9 @@ const defaultGuildData: GuildConfig = {
     warnings_before_mute: 3,
     warning_expiry_hours: 1,
     mute_duration_minutes: 10,
-    delete_messages: true
+    delete_messages: true,
+    whitelist_roles: [],
+    whitelist_members: []
   },
   welcome_config: {
     enabled: false,

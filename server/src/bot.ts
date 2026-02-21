@@ -253,69 +253,76 @@ client.on('messageCreate', async (message: Message) => {
     const config = db_manager.getConfig(message.guild.id);
     const automodConfig = db_manager.getAutoModConfig(message.guild.id);
 
-    // Auto-Mod: Content Filter
-    if (automodConfig.enabled) {
-        if (checkProfanity(message.content, automodConfig.banned_words)) {
-            if (automodConfig.delete_messages) {
-                await message.delete().catch(() => { });
-            }
+    // Whitelist check: Administrators, whitelisted members, and members with whitelisted roles are immune
+    const isWhitelisted = message.member?.permissions.has(PermissionsBitField.Flags.Administrator) ||
+        automodConfig.whitelist_members?.includes(message.author.id) ||
+        message.member?.roles.cache.some(role => automodConfig.whitelist_roles?.includes(role.id));
 
-            db_manager.addViolation(message.author.id, message.guild.id, 'Profanity/Banned Word', message.content);
+    if (!isWhitelisted) {
+        // Auto-Mod: Content Filter
+        if (automodConfig.enabled) {
+            if (checkProfanity(message.content, automodConfig.banned_words)) {
+                if (automodConfig.delete_messages) {
+                    await message.delete().catch(() => { });
+                }
 
-            if (automodConfig.warn_on_violation) {
-                db_manager.addWarning(message.author.id, message.guild.id, 'Usage of banned words');
+                db_manager.addViolation(message.author.id, message.guild.id, 'Profanity/Banned Word', message.content);
 
-                const userWarnings = db_manager.getUserWarnings(message.author.id, message.guild.id, automodConfig.warning_expiry_hours);
+                if (automodConfig.warn_on_violation) {
+                    db_manager.addWarning(message.author.id, message.guild.id, 'Usage of banned words');
 
-                if (userWarnings.length >= automodConfig.warnings_before_mute) {
-                    if (automodConfig.mute_on_violation || true) { // Default to timeout for now
-                        const member = await message.guild.members.fetch(message.author.id).catch(() => null);
-                        if (member) {
-                            const muteMs = automodConfig.mute_duration_minutes * 60000;
-                            await member.timeout(muteMs, 'Auto-Mod: Repeated violations').catch(console.error);
+                    const userWarnings = db_manager.getUserWarnings(message.author.id, message.guild.id, automodConfig.warning_expiry_hours);
 
-                            // Add Muted Role if configured
-                            if (config.muted_role_id) {
-                                await member.roles.add(config.muted_role_id).catch(() => { });
+                    if (userWarnings.length >= automodConfig.warnings_before_mute) {
+                        if (automodConfig.mute_on_violation || true) { // Default to timeout for now
+                            const member = await message.guild.members.fetch(message.author.id).catch(() => null);
+                            if (member) {
+                                const muteMs = automodConfig.mute_duration_minutes * 60000;
+                                await member.timeout(muteMs, 'Auto-Mod: Repeated violations').catch(console.error);
+
+                                // Add Muted Role if configured
+                                if (config.muted_role_id) {
+                                    await member.roles.add(config.muted_role_id).catch(() => { });
+                                }
+
+                                const expiresAt = new Date(Date.now() + muteMs).toISOString();
+                                db_manager.addMute(message.author.id, message.guild.id, expiresAt);
+
+                                await (message.channel as any).send(`🔇 ${message.author} has been muted for ${automodConfig.mute_duration_minutes} minutes due to repeated violations.`);
+
+                                await sendModLog(message.guild, 'Auto-Mod: User Muted', `${message.author.tag} was automatically muted for repeated violations.`, '#FF0000', [
+                                    { name: 'Target', value: `<@${message.author.id}>`, inline: true },
+                                    { name: 'Duration', value: `${automodConfig.mute_duration_minutes}m`, inline: true },
+                                    { name: 'Reason', value: 'Auto-Mod: Repeated violations' }
+                                ]);
                             }
-
-                            const expiresAt = new Date(Date.now() + muteMs).toISOString();
-                            db_manager.addMute(message.author.id, message.guild.id, expiresAt);
-
-                            await (message.channel as any).send(`🔇 ${message.author} has been muted for ${automodConfig.mute_duration_minutes} minutes due to repeated violations.`);
-
-                            await sendModLog(message.guild, 'Auto-Mod: User Muted', `${message.author.tag} was automatically muted for repeated violations.`, '#FF0000', [
-                                { name: 'Target', value: `<@${message.author.id}>`, inline: true },
-                                { name: 'Duration', value: `${automodConfig.mute_duration_minutes}m`, inline: true },
-                                { name: 'Reason', value: 'Auto-Mod: Repeated violations' }
-                            ]);
                         }
                     }
+                    else {
+                        const warnMsg = await (message.channel as any).send(`⚠️ ${message.author}, please watch your language! Warning (${userWarnings.length}/${automodConfig.warnings_before_mute})`);
+                        setTimeout(() => warnMsg.delete().catch(() => { }), 5000);
+                    }
                 }
-                else {
-                    const warnMsg = await (message.channel as any).send(`⚠️ ${message.author}, please watch your language! Warning (${userWarnings.length}/${automodConfig.warnings_before_mute})`);
-                    setTimeout(() => warnMsg.delete().catch(() => { }), 5000);
-                }
+                return;
             }
-            return;
         }
-    }
 
-    // Auto-Mod: Anti-Spam
-    if (config.features?.automod) {
-        const now = Date.now();
-        const timestamps = messageLog.get(message.author.id) || [];
-        timestamps.push(now);
+        // Auto-Mod: Anti-Spam
+        if (config.features?.automod) {
+            const now = Date.now();
+            const timestamps = messageLog.get(message.author.id) || [];
+            timestamps.push(now);
 
-        // Keep only last 5 seconds
-        const recentTimestamps = timestamps.filter(t => now - t < 5000);
-        messageLog.set(message.author.id, recentTimestamps);
+            // Keep only last 5 seconds
+            const recentTimestamps = timestamps.filter(t => now - t < 5000);
+            messageLog.set(message.author.id, recentTimestamps);
 
-        if (recentTimestamps.length > 5) {
-            await message.delete().catch(() => { });
-            return (message.channel as any).send(`⚠️ **Auto-Mod:** ${message.author}, please slow down!`).then((msg: any) => {
-                setTimeout(() => msg.delete().catch(() => { }), 3000);
-            });
+            if (recentTimestamps.length > 5) {
+                await message.delete().catch(() => { });
+                return (message.channel as any).send(`⚠️ **Auto-Mod:** ${message.author}, please slow down!`).then((msg: any) => {
+                    setTimeout(() => msg.delete().catch(() => { }), 3000);
+                });
+            }
         }
     }
 
@@ -527,6 +534,47 @@ client.on('messageCreate', async (message: Message) => {
             case 'ping':
                 if (!config.features?.ping) return message.reply('❌ **Ping Command** is currently disabled.');
                 await message.reply(`🏓 Pong! Latency is ${Date.now() - message.createdTimestamp}ms. API Latency is ${Math.round(client.ws.ping)}ms.`);
+                break;
+
+            case 'whitelist':
+                if (!message.member?.permissions.has(PermissionsBitField.Flags.Administrator)) return message.reply('❌ Administrator role is required.');
+                const action = args[0]?.toLowerCase();
+                const type = args[1]?.toLowerCase();
+                const targetId = message.mentions.users.first()?.id || message.mentions.roles.first()?.id || args[2];
+
+                if (!action || !['add', 'remove', 'list'].includes(action)) {
+                    return message.reply(`❌ Usage: \`${prefix}whitelist <add|remove|list> <role|member> <@user|@role|ID>\``);
+                }
+
+                if (action === 'list') {
+                    const wEmbed = new EmbedBuilder()
+                        .setTitle('🛡️ Auto-Mod Whitelist')
+                        .addFields(
+                            { name: 'Whitelisted Roles', value: automodConfig.whitelist_roles?.length > 0 ? automodConfig.whitelist_roles.map((id: string) => `<@&${id}>`).join(', ') : 'None' },
+                            { name: 'Whitelisted Members', value: automodConfig.whitelist_members?.length > 0 ? automodConfig.whitelist_members.map((id: string) => `<@${id}>`).join(', ') : 'None' }
+                        )
+                        .setColor('#5865F2');
+                    return (message.channel as any).send({ embeds: [wEmbed] });
+                }
+
+                if (!type || !['role', 'member', 'user'].includes(type) || !targetId) {
+                    return message.reply(`❌ Usage: \`${prefix}whitelist ${action} <role|member> <@user|@role|ID>\``);
+                }
+
+                const field = (type === 'role') ? 'whitelist_roles' : 'whitelist_members';
+                const currentWhitelist = automodConfig[field] || [];
+
+                if (action === 'add') {
+                    if (currentWhitelist.includes(targetId)) return message.reply('❌ Already whitelisted.');
+                    currentWhitelist.push(targetId);
+                    db_manager.updateAutoModConfig(message.guild.id, { [field]: currentWhitelist });
+                    await message.reply(`✅ Added to whitelist: ${type === 'role' ? `<@&${targetId}>` : `<@${targetId}>`}`);
+                } else if (action === 'remove') {
+                    if (!currentWhitelist.includes(targetId)) return message.reply('❌ Not in whitelist.');
+                    const updatedWhitelist = currentWhitelist.filter((id: string) => id !== targetId);
+                    db_manager.updateAutoModConfig(message.guild.id, { [field]: updatedWhitelist });
+                    await message.reply(`✅ Removed from whitelist: ${type === 'role' ? `<@&${targetId}>` : `<@${targetId}>`}`);
+                }
                 break;
 
             case 'setup':
