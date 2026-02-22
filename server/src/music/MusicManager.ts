@@ -12,9 +12,6 @@ export class MusicManager {
             emitAddSongWhenCreatingQueue: false,
             emitAddListWhenCreatingQueue: false,
             plugins: [new YtDlpPlugin()],
-            leaveOnEmpty: true,
-            leaveOnFinish: false,
-            leaveOnStop: true,
             ffmpeg: {
                 path: ffmpegPath || 'ffmpeg'
             }

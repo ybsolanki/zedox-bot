@@ -1,6 +1,7 @@
 import { PermissionsBitField } from 'discord.js';
 import { Command } from '../../handlers/CommandHandler.js';
 import { db_manager } from '../../database.js';
+import { sendModLog } from '../../utils/modLogs.js';
 
 export const command: Command = {
     name: 'mute',
@@ -32,5 +33,12 @@ export const command: Command = {
         const muteExpiresAt = new Date(Date.now() + muteMsValue).toISOString();
         db_manager.addMute(muteUser.id, message.guild!.id, muteExpiresAt);
         await message.reply(`✅ Muted ${muteUser.user.tag} for ${durationStr}.`);
+
+        await sendModLog(message.guild!, 'User Muted', `${muteUser.user.tag} was muted.`, '#FFA500', [
+            { name: 'Target', value: `<@${muteUser.id}>`, inline: true },
+            { name: 'Moderator', value: `${message.author.tag}`, inline: true },
+            { name: 'Duration', value: durationStr, inline: true },
+            { name: 'Reason', value: muteReason }
+        ]);
     }
 };
