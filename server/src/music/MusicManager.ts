@@ -1,5 +1,6 @@
 import { DisTube } from 'distube';
 import { YtDlpPlugin } from '@distube/yt-dlp';
+import { YouTubePlugin } from '@distube/youtube';
 import { Client, EmbedBuilder, ActivityType } from 'discord.js';
 import ffmpegPath from 'ffmpeg-static';
 
@@ -11,7 +12,10 @@ export class MusicManager {
             emitNewSongOnly: true,
             emitAddSongWhenCreatingQueue: false,
             emitAddListWhenCreatingQueue: false,
-            plugins: [new YtDlpPlugin()],
+            plugins: [
+                new YouTubePlugin(),
+                new YtDlpPlugin()
+            ],
             ffmpeg: {
                 path: ffmpegPath || 'ffmpeg'
             }
@@ -55,7 +59,18 @@ export class MusicManager {
             })
             .on('error', (channel: any, e: any) => {
                 console.error('[Music Error]', e);
-                if (channel) channel.send(`❌ Music Error: ${e.message || e.toString().slice(0, 1900)}`);
+                if (channel) {
+                    const errorEmbed = new EmbedBuilder()
+                        .setDescription(`❌ **Music Error:** ${e.message || e.toString().slice(0, 1900)}`)
+                        .setColor('#FF0000');
+                    channel.send({ embeds: [errorEmbed] }).catch(() => { });
+                }
+            })
+            .on('searchNoResult', (message, query) => {
+                message.channel.send(`❌ No results found for \`${query}\`!`).catch(() => { });
+            })
+            .on('noRelated', (queue) => {
+                queue.textChannel?.send('❌ Can\'t find any related songs to play.').catch(() => { });
             })
             .on('empty', queue => {
                 queue.textChannel?.send('Voice channel is empty! Leaving...');

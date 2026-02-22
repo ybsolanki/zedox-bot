@@ -20,21 +20,31 @@ export const command: Command = {
         });
 
         const embed = new EmbedBuilder()
-            .setTitle(' Zedox | Prefix: `,` ')
+            .setTitle('Zedox Bot Commands')
             .setColor('#5865F2')
-            .setDescription('Here are the available commands for Zedox Bot.')
+            .setDescription(`Current prefix is \`${prefix}\` (Case-insensitive)`)
             .setFooter({ text: 'Tip: You can use short forms like ,si ,ui ,p ,s ,q etc.' });
 
         // Order categories: Moderation, Music, Utility
-        const categoryEmojis: { [key: string]: string } = {
-            moderation: '🛡️ Moderation',
-            music: '🎶 Music',
-            utility: '🛠️ Utility'
+        const categoryGroups: { [key: string]: { label: string, cmds: string[] } } = {
+            moderation: { label: '🛡️ Moderation', cmds: [] },
+            music: { label: '🎶 Music', cmds: [] },
+            utility: { label: '🛠️ Utility & Info', cmds: [] },
+            other: { label: '✨ Other', cmds: [] }
         };
 
-        for (const [cat, emoji] of Object.entries(categoryEmojis)) {
-            if (categories[cat]) {
-                embed.addFields({ name: emoji, value: categories[cat].join(', ') });
+        commandHandler.commands.forEach(cmd => {
+            const cat = cmd.category === 'utility' && cmd.name === 'help' ? 'other' : cmd.category;
+            if (categoryGroups[cat]) {
+                categoryGroups[cat].cmds.push(`\`${cmd.name}\``);
+            } else if (categoryGroups['utility']) {
+                categoryGroups['utility'].cmds.push(`\`${cmd.name}\``);
+            }
+        });
+
+        for (const group of Object.values(categoryGroups)) {
+            if (group.cmds.length > 0) {
+                embed.addFields({ name: group.label, value: group.cmds.join(', ') });
             }
         }
 
