@@ -65,19 +65,42 @@ passport.use(new DiscordStrategy({
     callbackURL: CALLBACK_URL,
     scope: ['identify', 'guilds']
 }, (accessToken, refreshToken, profile, done) => {
-    db_manager.upsertUser(profile.id, accessToken, refreshToken, profile);
-    return done(null, profile);
+    try {
+        console.log(`[AUTH] Strategy callback for user: ${profile.username} (${profile.id})`);
+        db_manager.upsertUser(profile.id, accessToken, refreshToken, profile);
+        return done(null, profile);
+    } catch (error) {
+        console.error('[AUTH] Strategy error:', error);
+        return done(error as Error);
+    }
 }));
 
 // Auth Routes
 app.get('/auth/discord', passport.authenticate('discord'));
-app.get('/auth/callback', passport.authenticate('discord', {
-    failureRedirect: '/'
-}), (req, res) => {
-    const user: any = req.user;
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, { httpOnly: false }); // Allow frontend to read for now
-    res.redirect('/');
+app.get('/auth/callback', (req, res, next) => {
+    console.log('[AUTH] Callback received');
+    passport.authenticate('discord', (err: any, user: any, info: any) => {
+        if (err) {
+            console.error('[AUTH] Passport authenticate error:', err);
+            return res.status(500).send(`Authentication Error: ${err.message || err}`);
+        }
+        if (!user) {
+            console.error('[AUTH] No user found in callback:', info);
+            return res.status(401).send('Authentication Failed: No user profile received.');
+        }
+
+        req.logIn(user, (loginErr) => {
+            if (loginErr) {
+                console.error('[AUTH] Login error:', loginErr);
+                return res.status(500).send('Login Error');
+            }
+
+            console.log(`[AUTH] User ${user.username} logged in successfully`);
+            const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+            res.cookie('token', token, { httpOnly: false });
+            res.redirect('/');
+        });
+    })(req, res, next);
 });
 
 app.get('/auth/logout', (req, res) => {

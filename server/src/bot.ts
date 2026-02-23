@@ -24,7 +24,7 @@ export const eventHandler = new EventHandler(client);
 
 // Bot start function for API
 export function startBot() {
-    client.login(process.env.DISCORD_TOKEN).catch(err => {
+    client.login(process.env.DISCORD_BOT_TOKEN).catch(err => {
         console.error('❌ Failed to login:', err);
     });
 }

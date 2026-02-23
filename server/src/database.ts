@@ -134,18 +134,31 @@ const defaultData: DBData = {
 };
 
 function readDB(): DBData {
-  if (!fs.existsSync(dbPath)) {
-    fs.writeFileSync(dbPath, JSON.stringify(defaultData, null, 2));
+  try {
+    if (!fs.existsSync(dbPath)) {
+      fs.writeFileSync(dbPath, JSON.stringify(defaultData, null, 2));
+      return defaultData;
+    }
+    const content = fs.readFileSync(dbPath, 'utf8');
+    if (!content.trim()) return defaultData;
+
+    const data = JSON.parse(content);
+    if (!data.guilds || !data.users) {
+      return { guilds: data.guilds || {}, users: data.users || {} };
+    }
+    return data;
+  } catch (error) {
+    console.error('[DB] Error reading database:', error);
     return defaultData;
   }
-  const data = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-  // Migration or initialization
-  if (!data.guilds) return { guilds: {}, users: {} };
-  return data;
 }
 
 function writeDB(data: DBData) {
-  fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('[DB] Error writing database:', error);
+  }
 }
 
 function getGuildData(data: DBData, guildId: string): GuildConfig {
