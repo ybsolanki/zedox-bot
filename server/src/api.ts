@@ -68,7 +68,10 @@ passport.use(new DiscordStrategy({
     clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
     callbackURL: CALLBACK_URL,
     scope: ['identify', 'guilds'],
-    state: true // Enable state protection
+    state: true, // Enable state protection
+    customHeaders: {
+        'User-Agent': 'ZedoxBot (https://zedox-bot.onrender.com, 1.0.0)'
+    }
 }, (accessToken, refreshToken, profile, done) => {
     try {
         console.log(`[AUTH] Strategy callback for user: ${profile.username} (${profile.id})`);
