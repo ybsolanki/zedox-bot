@@ -12,7 +12,9 @@ import {
     Zap,
     Hammer,
     Plus,
-    X
+    X,
+    FileText,
+    Lock
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -355,6 +357,26 @@ export default function App() {
                             >
                                 <Settings size={20} /> Settings
                             </button>
+                            <div className="pt-4 mt-2 border-t border-white/5 space-y-1">
+                                <button
+                                    onClick={() => setActiveTab('tos')}
+                                    className={cn(
+                                        "w-full flex items-center gap-3 px-4 py-2 rounded-xl transition-all text-xs font-bold uppercase tracking-widest",
+                                        activeTab === 'tos' ? "bg-white/10 text-white" : "text-white/30 hover:bg-white/5 hover:text-white/50"
+                                    )}
+                                >
+                                    <FileText size={14} /> Terms of Service
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('privacy')}
+                                    className={cn(
+                                        "w-full flex items-center gap-3 px-4 py-2 rounded-xl transition-all text-xs font-bold uppercase tracking-widest",
+                                        activeTab === 'privacy' ? "bg-white/10 text-white" : "text-white/30 hover:bg-white/5 hover:text-white/50"
+                                    )}
+                                >
+                                    <Lock size={14} /> Privacy Policy
+                                </button>
+                            </div>
                         </nav>
 
                         <div className="mt-auto pt-8 border-t border-white/5 flex flex-col gap-4">
@@ -835,6 +857,91 @@ export default function App() {
                                     active={config.features?.info}
                                     onToggle={(v: boolean) => handleUpdateConfig('features.info', v)}
                                 />
+                            </div>
+                        )}
+
+                        {activeTab === 'tos' && (
+                            <div className="max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <section className="bg-surface p-12 rounded-3xl border border-white/5 space-y-8 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" />
+                                    <div className="relative space-y-6">
+                                        <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase mb-4">
+                                            <FileText size={14} /> Legal Documentation
+                                        </div>
+                                        <h2 className="text-4xl font-extrabold text-white">Terms of Service</h2>
+                                        <p className="text-white/40 text-lg">Last updated: February 23, 2026</p>
+
+                                        <div className="space-y-8 pt-8 text-white/70 leading-relaxed">
+                                            <div className="space-y-4">
+                                                <h3 className="text-xl font-bold text-white">1. Acceptance of Terms</h3>
+                                                <p>By adding Zedox Bot to your Discord server or using our dashboard, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the service.</p>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <h3 className="text-xl font-bold text-white">2. Bot Usage</h3>
+                                                <p>Zedox Bot is intended for server moderation and utility. You agree not to:</p>
+                                                <ul className="list-disc list-inside ml-4 space-y-2">
+                                                    <li>Use the bot for any malicious activity or spamming.</li>
+                                                    <li>Attempt to reverse engineer or exploit the bot's functionality.</li>
+                                                    <li>Violate Discord's Terms of Service while using our bot.</li>
+                                                </ul>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <h3 className="text-xl font-bold text-white">3. Data Collection</h3>
+                                                <p>We collect minimal data necessary for the bot to function, including Guild IDs, User IDs for configuration, and command usage logs. For more details, see our <button onClick={() => setActiveTab('privacy')} className="text-primary hover:underline">Privacy Policy</button>.</p>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <h3 className="text-xl font-bold text-white">4. Disclaimer</h3>
+                                                <p>Zedox Bot is provided "as-is" without any warranties, express or implied. We are not responsible for any damages or data loss resulting from the use of our services.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        )}
+
+                        {activeTab === 'privacy' && (
+                            <div className="max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <section className="bg-surface p-12 rounded-3xl border border-white/5 space-y-8 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" />
+                                    <div className="relative space-y-6">
+                                        <div className="inline-flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase mb-4">
+                                            <Lock size={14} /> Security & Privacy
+                                        </div>
+                                        <h2 className="text-4xl font-extrabold text-white">Privacy Policy</h2>
+                                        <p className="text-white/40 text-lg">Your data privacy is our top priority.</p>
+
+                                        <div className="space-y-8 pt-8 text-white/70 leading-relaxed">
+                                            <div className="space-y-4">
+                                                <h3 className="text-xl font-bold text-white">1. Data We Collect</h3>
+                                                <p>We only collect data that is essential for bot functionality:</p>
+                                                <ul className="list-disc list-inside ml-4 space-y-2">
+                                                    <li><strong>User IDs:</strong> To track configuration and permissions.</li>
+                                                    <li><strong>Server (Guild) IDs:</strong> To store server-specific settings.</li>
+                                                    <li><strong>Command Usage:</strong> Logged for maintenance and debugging purposes.</li>
+                                                    <li><strong>Configuration Settings:</strong> Such as welcome messages, auto-mod rules, and music preferences.</li>
+                                                </ul>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <h3 className="text-xl font-bold text-white">2. How We Use Data</h3>
+                                                <p>Your data is used solely to provide and improve the Zedox Bot experience. We do not sell or share your personal data with third parties.</p>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <h3 className="text-xl font-bold text-white">3. Third-Party Services</h3>
+                                                <p>Zedox Bot interacts with the Discord API. Please refer to Discord's Privacy Policy for information regarding how they handle your data.</p>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <h3 className="text-xl font-bold text-white">4. Your Rights</h3>
+                                                <p>You have the right to request the deletion of your data. To do so, please remove the bot from your server or contact our support team.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
                             </div>
                         )}
                     </main>
