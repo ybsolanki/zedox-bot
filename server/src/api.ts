@@ -55,8 +55,12 @@ app.use(passport.session());
 
 passport.serializeUser((user: any, done) => done(null, user.id));
 passport.deserializeUser((id: string, done) => {
-    const user = db_manager.getUser(id);
-    done(null, user ? user.profile : null);
+    try {
+        const user = db_manager.getUser(id);
+        done(null, user ? user.profile : null);
+    } catch (err) {
+        done(err);
+    }
 });
 
 passport.use(new DiscordStrategy({
@@ -116,11 +120,23 @@ const authenticateJWT = (req: any, res: any, next: any) => {
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
     jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
-        if (err) return res.status(401).json({ error: 'Unauthorized' });
+        if (err) {
+            console.error('[AUTH] JWT Verification failed:', err.message);
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
         req.user = decoded;
         next();
     });
 };
+
+console.log('[INIT] Dashboard configuration:');
+console.log(`- Port: ${port}`);
+console.log(`- Callback URL: ${CALLBACK_URL}`);
+console.log(`- Client ID set: ${!!process.env.DISCORD_CLIENT_ID}`);
+console.log(`- Client Secret set: ${!!process.env.DISCORD_CLIENT_SECRET}`);
+if (process.env.DISCORD_CLIENT_ID) {
+    console.log(`- Client ID starts with: ${process.env.DISCORD_CLIENT_ID.substring(0, 4)}...`);
+}
 
 // Serve static files from the React app
 const clientPath = path.join(__dirname, '../../client/dist');
