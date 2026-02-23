@@ -61,6 +61,7 @@ export default function App() {
     const [guilds, setGuilds] = useState<any[]>([]);
     const [selectedGuild, setSelectedGuild] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
     const [stats, setStats] = useState({ uptime: 0, guilds: 0, users: 0, commandsRun: 0 });
     const [config, setConfig] = useState<any>({ prefix: ',', error_logging: true, status_message: '', features: {} });
@@ -152,6 +153,7 @@ export default function App() {
     }, [activeTab, selectedGuild]);
 
     const handleLogin = () => {
+        setIsLoggingIn(true);
         window.location.href = '/auth/discord';
     };
 
@@ -247,10 +249,25 @@ export default function App() {
                         </div>
                         <button
                             onClick={handleLogin}
-                            className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-4 rounded-xl shadow-lg shadow-[#5865F2]/20 transition-all flex items-center justify-center gap-3 group"
+                            disabled={isLoggingIn}
+                            className={cn(
+                                "w-full text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-3 group",
+                                isLoggingIn
+                                    ? "bg-white/10 cursor-not-allowed"
+                                    : "bg-[#5865F2] hover:bg-[#4752C4] shadow-[#5865F2]/20"
+                            )}
                         >
-                            <img src="https://cdn.prod.website-files.com/6257adef93867e3ed1449492/6257adef93867e611844955b_White%20Logo.svg" alt="Discord" className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                            Login with Discord
+                            {isLoggingIn ? (
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Redirecting to Discord...
+                                </>
+                            ) : (
+                                <>
+                                    <img src="https://cdn.prod.website-files.com/6257adef93867e3ed1449492/6257adef93867e611844955b_White%20Logo.svg" alt="Discord" className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                                    Login with Discord
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>

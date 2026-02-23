@@ -67,7 +67,8 @@ passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID || '',
     clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
     callbackURL: CALLBACK_URL,
-    scope: ['identify', 'guilds']
+    scope: ['identify', 'guilds'],
+    state: true // Enable state protection
 }, (accessToken, refreshToken, profile, done) => {
     try {
         console.log(`[AUTH] Strategy callback for user: ${profile.username} (${profile.id})`);
@@ -86,6 +87,21 @@ app.get('/auth/callback', (req, res, next) => {
     passport.authenticate('discord', (err: any, user: any, info: any) => {
         if (err) {
             console.error('[AUTH] Passport authenticate error:', err);
+
+            // Handle Discord/Cloudflare Rate Limits (429/1015)
+            if (err.oauthError && (err.oauthError.statusCode === 429 || err.oauthError.data?.includes('1015'))) {
+                return res.status(500).send(`
+                    <div style="font-family: sans-serif; padding: 40px; text-align: center; background: #2f3136; color: white; height: 100vh; display: flex; flex-direction: column; justify-content: center;">
+                        <h1 style="color: #ed4245;">Rate Limit Encountered</h1>
+                        <p style="font-size: 1.2rem; color: #b9bbbe; max-width: 600px; margin: 20px auto;">
+                            Discord (via Cloudflare) is temporarily rate-limiting requests from Render's shared IP addresses (Error 1015).
+                        </p>
+                        <p style="color: #b9bbbe;">Please wait 2-5 minutes and try logging in again.</p>
+                        <a href="/" style="margin-top: 30px; padding: 12px 24px; background: #5865f2; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Return to Dashboard</a>
+                    </div>
+                `);
+            }
+
             return res.status(500).send(`Authentication Error: ${err.message || err}`);
         }
         if (!user) {
