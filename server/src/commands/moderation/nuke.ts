@@ -14,11 +14,11 @@ export const command: Command = {
         const position = channel.position;
         const topic = channel.topic;
 
-        const newChannel = await channel.clone();
-        await channel.delete();
+        const newChannel = await (channel as any).clone();
+        await (channel as any).delete();
 
-        await newChannel.setPosition(position);
-        if (topic) await newChannel.setTopic(topic);
+        await (newChannel as any).setPosition(position);
+        if (topic) await (newChannel as any).setTopic(topic);
 
         await newChannel.send('☢️ **Channel Nuked Successfully.**');
     }

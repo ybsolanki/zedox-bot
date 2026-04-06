@@ -11,7 +11,7 @@ export const command: Command = {
         const seconds = parseInt(args[0]);
         if (isNaN(seconds) || seconds < 0 || seconds > 21600) return message.reply('❌ Provide a number of seconds between 0 and 21600.');
 
-        const channel = message.channel as TextChannel;
+        const channel = message.channel as any;
         await channel.setRateLimitPerUser(seconds);
 
         if (seconds === 0) {
