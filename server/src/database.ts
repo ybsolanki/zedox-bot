@@ -23,6 +23,8 @@ interface GuildConfig {
     muted_role_id: string | null;
     ticket_category_id: string | null;
     staff_role_id: string | null;
+    verified_role_id: string | null;
+    unverified_role_id: string | null;
     ticket_count: number;
     features: {
       moderation: boolean;
@@ -83,6 +85,8 @@ const defaultGuildData: GuildConfig = {
     muted_role_id: null,
     ticket_category_id: null,
     staff_role_id: null,
+    verified_role_id: null,
+    unverified_role_id: null,
     ticket_count: 0,
     features: {
       moderation: true,

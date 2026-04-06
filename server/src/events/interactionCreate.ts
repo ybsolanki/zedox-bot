@@ -74,6 +74,28 @@ export const event = {
             }
         }
 
+        if (interaction.customId === 'verify_member') {
+            const guild = interaction.guild;
+            if (!guild) return;
+
+            const config = db_manager.getConfig(guild.id);
+            if (!config.verified_role_id || !config.unverified_role_id) {
+                return interaction.reply({ content: '❌ Verification system is not configured correctly.', ephemeral: true });
+            }
+
+            const member = await guild.members.fetch(interaction.user.id);
+            if (!member) return;
+
+            try {
+                await member.roles.add(config.verified_role_id);
+                await member.roles.remove(config.unverified_role_id);
+                await interaction.reply({ content: '✅ You have been verified successfully! Access granted.', ephemeral: true });
+            } catch (error) {
+                console.error('[VERIFY] Error during verification:', error);
+                await interaction.reply({ content: '❌ Failed to update your roles. Please contact an admin.', ephemeral: true });
+            }
+        }
+
         if (interaction.customId === 'ticket_close') {
             const channel = interaction.channel;
             if (!channel || channel.type !== ChannelType.GuildText) return;
