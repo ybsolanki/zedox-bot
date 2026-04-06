@@ -38,7 +38,8 @@ export const command: Command = {
                     .setEmoji('🎫')
             );
 
-            await message.channel.send({ embeds: [embed], components: [row] });
+            const channel = message.channel as any;
+            await channel.send({ embeds: [embed], components: [row] });
             await message.reply('✅ Ticket system configured and setup embed sent!');
         } catch (error) {
             console.error(error);
