@@ -24,6 +24,27 @@ export const command: Command = {
             db_manager.updateConfig(message.guild.id, 'verified_role_id', verifiedRoleId);
             db_manager.updateConfig(message.guild.id, 'unverified_role_id', unverifiedRoleId);
 
+            // 1. Create Category
+            const category = await message.guild.channels.create({
+                name: 'VERIFICATION',
+                type: ChannelType.GuildCategory,
+                permissionOverwrites: [
+                    { id: message.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel] }
+                ]
+            });
+
+            // 2. Create Channel in Category
+            const verifyChannel = await message.guild.channels.create({
+                name: 'verify-here',
+                type: ChannelType.GuildText,
+                parent: category.id,
+                permissionOverwrites: [
+                    { id: message.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel], deny: [PermissionsBitField.Flags.SendMessages] }
+                ]
+            });
+
             const embed = new EmbedBuilder()
                 .setTitle('🛡️ Server Verification')
                 .setDescription('Welcome to the server! To prevent spam and gain access to the rest of the channels, please click the button below to verify your account.')
@@ -38,9 +59,8 @@ export const command: Command = {
                     .setEmoji('✅')
             );
 
-            const channel = message.channel as any; // Cast to bypass type check for Sendable
-            await channel.send({ embeds: [embed], components: [row] });
-            await message.reply('✅ Verification system configured and message sent!');
+            await (verifyChannel as any).send({ embeds: [embed], components: [row] });
+            await message.reply(`✅ Verification system configured!\nCategory: **${category.name}**\nChannel: ${verifyChannel}`);
         } catch (error) {
             console.error(error);
             await message.reply('❌ Failed to configure verification system.');
