@@ -1,5 +1,6 @@
 import { PermissionsBitField, ChannelType, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { Command, commandHandler } from '../../handlers/CommandHandler.js';
+import { Command } from '../../handlers/CommandHandler.js';
+import { commandHandler } from '../../bot.js';
 import { db_manager } from '../../database.js';
 
 export const command: Command = {
