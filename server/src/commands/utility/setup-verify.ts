@@ -30,7 +30,7 @@ export const command: Command = {
                 type: ChannelType.GuildCategory,
                 permissionOverwrites: [
                     { id: message.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel] }
+                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory] }
                 ]
             });
 
@@ -41,7 +41,7 @@ export const command: Command = {
                 parent: category.id,
                 permissionOverwrites: [
                     { id: message.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel], deny: [PermissionsBitField.Flags.SendMessages] }
+                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory], deny: [PermissionsBitField.Flags.SendMessages] }
                 ]
             });
 
