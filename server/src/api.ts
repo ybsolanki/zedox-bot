@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
@@ -11,24 +14,35 @@ import { fileURLToPath } from 'url';
 import { client, startBot } from './bot.js';
 import { PermissionsBitField } from 'discord.js';
 
-startBot();
+process.on('uncaughtException', (err) => {
+    console.error('UNCAUGHT EXCEPTION:', err);
+});
 
-import dotenv from 'dotenv';
-dotenv.config();
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
+});
+
+startBot();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Validate environment variables
-const requiredEnv = ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_BOT_TOKEN'];
-const missingEnv = requiredEnv.filter(env => !process.env[env]);
+const requiredEnv = ['DISCORD_BOT_TOKEN'];
+const dashboardEnv = ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET'];
 
-if (missingEnv.length > 0) {
+const missingRequired = requiredEnv.filter(env => !process.env[env]);
+const missingDashboard = dashboardEnv.filter(env => !process.env[env]);
+
+if (missingRequired.length > 0) {
     console.error('CRITICAL ERROR: Missing required environment variables:');
-    missingEnv.forEach(env => console.error(`- ${env}`));
-    console.error('\nPlease add these to your environment (or .env file) to continue.');
-    console.error('If you are deploying on Render, add them in the "Environment" tab.');
+    missingRequired.forEach(env => console.error(`- ${env}`));
     process.exit(1);
+}
+
+if (missingDashboard.length > 0) {
+    console.warn('WARNING: Dashboard authentication variables are missing. Dashboard login will not work.');
+    missingDashboard.forEach(env => console.warn(`- ${env}`));
 }
 
 const app = express();

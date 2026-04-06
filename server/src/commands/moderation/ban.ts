@@ -19,6 +19,7 @@ export const command: Command = {
 
         const banReason = args.slice(1).join(' ') || 'No reason provided';
         await banMember.ban({ reason: banReason });
+        db_manager.addViolation(banMember.id, message.guild!.id, 'Ban', banReason);
         await message.reply(`✅ Banned ${banMember.user.tag}.`);
 
         await sendModLog(message.guild!, 'User Banned', `${banMember.user.tag} was permanently banned.`, '#FF0000', [

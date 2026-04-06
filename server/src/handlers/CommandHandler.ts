@@ -3,6 +3,8 @@ import { MusicManager } from '../music/MusicManager.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { db_manager } from '../database.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,8 +62,10 @@ export class CommandHandler {
         if (command) {
             try {
                 await command.execute(message, args, musicManager);
+                db_manager.logCommand(uuidv4(), command.name, message.author.tag, message.guild!.id, true);
             } catch (error) {
                 console.error(error);
+                db_manager.logCommand(uuidv4(), command.name, message.author.tag, message.guild!.id, false);
                 message.reply('❌ There was an error executing that command.');
             }
         }

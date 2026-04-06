@@ -32,6 +32,7 @@ export const command: Command = {
 
         const muteExpiresAt = new Date(Date.now() + muteMsValue).toISOString();
         db_manager.addMute(muteUser.id, message.guild!.id, muteExpiresAt);
+        db_manager.addViolation(muteUser.id, message.guild!.id, 'Mute', muteReason);
         await message.reply(`✅ Muted ${muteUser.user.tag} for ${durationStr}.`);
 
         await sendModLog(message.guild!, 'User Muted', `${muteUser.user.tag} was muted.`, '#FFA500', [

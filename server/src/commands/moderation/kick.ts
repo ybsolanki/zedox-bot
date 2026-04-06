@@ -19,6 +19,7 @@ export const command: Command = {
 
         const kickReason = args.slice(1).join(' ') || 'No reason provided';
         await kickMember.kick(kickReason);
+        db_manager.addViolation(kickMember.id, message.guild!.id, 'Kick', kickReason);
         await message.reply(`✅ Kicked ${kickMember.user.tag}.`);
 
         await sendModLog(message.guild!, 'User Kicked', `${kickMember.user.tag} was kicked from the server.`, '#FFA500', [
