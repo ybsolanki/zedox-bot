@@ -26,13 +26,15 @@ export const command: Command = {
 
             // 1. Create Category
             const category = await message.guild.channels.create({
-                name: 'VERIFICATION',
+                name: '🛡️ VERIFICATION',
                 type: ChannelType.GuildCategory,
                 permissionOverwrites: [
                     { id: message.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory] }
+                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory, PermissionsBitField.Flags.UseExternalEmojis] },
+                    { id: verifiedRoleId, deny: [PermissionsBitField.Flags.ViewChannel] }
                 ]
             });
+            console.log(`[VERIFY] Created category: ${category.name}`);
 
             // 2. Create Channel in Category
             const verifyChannel = await message.guild.channels.create({
@@ -41,26 +43,38 @@ export const command: Command = {
                 parent: category.id,
                 permissionOverwrites: [
                     { id: message.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory], deny: [PermissionsBitField.Flags.SendMessages] }
+                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory], deny: [PermissionsBitField.Flags.SendMessages] },
+                    { id: verifiedRoleId, deny: [PermissionsBitField.Flags.ViewChannel] }
                 ]
             });
+            console.log(`[VERIFY] Created channel: ${verifyChannel.name}`);
 
             const embed = new EmbedBuilder()
-                .setTitle('🛡️ Server Verification')
-                .setDescription('Welcome to the server! To prevent spam and gain access to the rest of the channels, please click the button below to verify your account.')
-                .setColor('#00FF00')
-                .setFooter({ text: 'Zedox Security System' });
+                .setAuthor({ name: 'ZEDOX™ SECURITY', iconURL: message.guild.iconURL() || undefined })
+                .setTitle('🛡️ Gateway Verification')
+                .setDescription(`
+                    👋 **Welcome to the Inner Circle.**
+                    
+                    To maintain the high standards of **${message.guild.name}**, you're required to verify your identity.
+                    
+                    *Click the button below to unlock all channels and join the community.*
+                    
+                    > **Note:** By verifying, you agree to follow the server rules and maintain loyalty.
+                `)
+                .setColor('#000001') // Deep Aesthetic Black
+                .setThumbnail(message.guild.iconURL({ size: 1024 }) || null)
+                .setFooter({ text: 'Zedox™ | Security Enforcement System', iconURL: message.client.user?.displayAvatarURL() });
 
             const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
                 new ButtonBuilder()
                     .setCustomId('verify_member')
-                    .setLabel('Verify')
-                    .setStyle(ButtonStyle.Success)
-                    .setEmoji('✅')
+                    .setLabel('Complete Verification')
+                    .setStyle(ButtonStyle.Secondary) // Darker gray button for "calm" look
+                    .setEmoji('🛡️')
             );
 
             await (verifyChannel as any).send({ embeds: [embed], components: [row] });
-            await message.reply(`✅ Verification system configured!\nCategory: **${category.name}**\nChannel: ${verifyChannel}`);
+            await message.reply(`✅ Verification system configured!\nCategory: **${category.name}**\nChannel: ${verifyChannel}\n\n*Unverified members will now see ONLY this category. Verified members will no longer see it.*`);
         } catch (error) {
             console.error(error);
             await message.reply('❌ Failed to configure verification system.');

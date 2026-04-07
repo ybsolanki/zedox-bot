@@ -80,19 +80,34 @@ export const event = {
 
             const config = db_manager.getConfig(guild.id);
             if (!config.verified_role_id || !config.unverified_role_id) {
-                return interaction.reply({ content: '❌ Verification system is not configured correctly.', ephemeral: true });
+                return interaction.reply({ content: '❌ Verification system is not configured correctly. Roles missing in database.', ephemeral: true });
             }
 
             const member = await guild.members.fetch(interaction.user.id);
             if (!member) return;
 
+            const botMember = guild.members.me;
+            if (!botMember?.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+                return interaction.reply({ content: '❌ I do not have permission to manage roles. Please contact an administrator.', ephemeral: true });
+            }
+
             try {
-                await member.roles.add(config.verified_role_id);
-                await member.roles.remove(config.unverified_role_id);
-                await interaction.reply({ content: '✅ You have been verified successfully! Access granted.', ephemeral: true });
+                // Check if user already has verified role to avoid redundant work
+                if (member.roles.cache.has(config.verified_role_id)) {
+                    return interaction.reply({ content: 'ℹ️ You are already verified!', ephemeral: true });
+                }
+
+                await member.roles.add(config.verified_role_id, 'Member verified through security system');
+
+                if (member.roles.cache.has(config.unverified_role_id)) {
+                    await member.roles.remove(config.unverified_role_id, 'Member verified, removing unverified role');
+                }
+
+                await interaction.reply({ content: '✅ **Verification Successful!** You now have full access to the server.', ephemeral: true });
+                console.log(`[VERIFY] ${member.user.tag} successfully verified.`);
             } catch (error) {
                 console.error('[VERIFY] Error during verification:', error);
-                await interaction.reply({ content: '❌ Failed to update your roles. Please contact an admin.', ephemeral: true });
+                await interaction.reply({ content: '❌ Failed to update your roles. My top role might be below the Verified/Unverified roles.', ephemeral: true });
             }
         }
 

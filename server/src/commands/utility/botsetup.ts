@@ -52,11 +52,12 @@ export const command: Command = {
 
             // 4. Create VERIFICATION Category
             const verifyCategory = await message.guild.channels.create({
-                name: '🔓 VERIFICATION',
+                name: '🛡️ VERIFICATION',
                 type: ChannelType.GuildCategory,
                 permissionOverwrites: [
                     { id: message.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory] }
+                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory, PermissionsBitField.Flags.UseExternalEmojis] },
+                    { id: verifiedRoleId, deny: [PermissionsBitField.Flags.ViewChannel] }
                 ]
             });
 
@@ -67,7 +68,8 @@ export const command: Command = {
                 parent: verifyCategory.id,
                 permissionOverwrites: [
                     { id: message.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory], deny: [PermissionsBitField.Flags.SendMessages] }
+                    { id: unverifiedRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory], deny: [PermissionsBitField.Flags.SendMessages] },
+                    { id: verifiedRoleId, deny: [PermissionsBitField.Flags.ViewChannel] }
                 ]
             });
 
@@ -103,17 +105,27 @@ export const command: Command = {
 
             // --- Verification Content ---
             const verifyEmbed = new EmbedBuilder()
-                .setTitle('🛡️ Server Verification')
-                .setDescription('Welcome to the server! Click the button below to verify and gain access to the rest of the channels.')
-                .setColor('#00FF00')
-                .setFooter({ text: 'Zedox Security' });
+                .setAuthor({ name: 'ZEDOX™ SECURITY', iconURL: message.guild.iconURL() || undefined })
+                .setTitle('🛡️ Gateway Verification')
+                .setDescription(`
+                    👋 **Welcome to the Inner Circle.**
+                    
+                    To maintain the high standards of **${message.guild.name}**, you're required to verify your identity.
+                    
+                    *Click the button below to unlock all channels and join the community.*
+                    
+                    > **Note:** By verifying, you agree to follow the server rules and maintain loyalty.
+                `)
+                .setColor('#000001') // Deep Aesthetic Black
+                .setThumbnail(message.guild.iconURL({ size: 1024 }) || null)
+                .setFooter({ text: 'Zedox™ | Security Enforcement System' });
 
             const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
                 new ButtonBuilder()
                     .setCustomId('verify_member')
-                    .setLabel('Verify')
-                    .setStyle(ButtonStyle.Success)
-                    .setEmoji('✅')
+                    .setLabel('Complete Verification')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('🛡️')
             );
 
             await (verifyChannel as any).send({ embeds: [verifyEmbed], components: [row] });
