@@ -25,6 +25,7 @@ interface GuildConfig {
     staff_role_id: string | null;
     verified_role_id: string | null;
     unverified_role_id: string | null;
+    verification_category_id: string | null;
     ticket_count: number;
     features: {
       moderation: boolean;
@@ -87,6 +88,7 @@ const defaultGuildData: GuildConfig = {
     staff_role_id: null,
     verified_role_id: null,
     unverified_role_id: null,
+    verification_category_id: null,
     ticket_count: 0,
     features: {
       moderation: true,

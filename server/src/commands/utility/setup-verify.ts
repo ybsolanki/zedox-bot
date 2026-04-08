@@ -13,11 +13,25 @@ export const command: Command = {
             return message.reply('❌ Admin required.');
         }
 
-        const verifiedRoleId = message.mentions.roles.at(0)?.id || args[0];
-        const unverifiedRoleId = message.mentions.roles.at(1)?.id || args[1];
+        let verifiedRoleId = message.mentions.roles.at(0)?.id || args[0];
+        let unverifiedRoleId = message.mentions.roles.at(1)?.id || args[1];
+
+        // Default Verified Role ID as requested by user
+        if (!verifiedRoleId) {
+            verifiedRoleId = '1359026651081736273';
+        }
+
+        // Try to find unverified role by name if not provided
+        if (!unverifiedRoleId) {
+            const unverifiedNames = ['unveryfied', 'unverified', 'Unverified', 'Unveryfied'];
+            const foundRole = message.guild.roles.cache.find(r => unverifiedNames.includes(r.name));
+            if (foundRole) {
+                unverifiedRoleId = foundRole.id;
+            }
+        }
 
         if (!verifiedRoleId || !unverifiedRoleId) {
-            return message.reply('❌ Usage: `,setup-verify <@VerifiedRole> <@UnverifiedRole>`');
+            return message.reply(`❌ Could not determine roles. Usage: \`,setup-verify <@VerifiedRole> <@UnverifiedRole>\` or ensure a role named "unveryfied" exists.`);
         }
 
         try {
@@ -35,6 +49,7 @@ export const command: Command = {
                 ]
             });
             console.log(`[VERIFY] Created category: ${category.name}`);
+            db_manager.updateConfig(message.guild.id, 'verification_category_id', category.id);
 
             // 2. Create Channel in Category
             const verifyChannel = await message.guild.channels.create({

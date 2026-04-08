@@ -14,11 +14,25 @@ export const command: Command = {
             return message.reply('❌ Admin required.');
         }
 
-        const verifiedRoleId = message.mentions.roles.at(0)?.id || args[0];
-        const unverifiedRoleId = message.mentions.roles.at(1)?.id || args[1];
+        let verifiedRoleId = message.mentions.roles.at(0)?.id || args[0];
+        let unverifiedRoleId = message.mentions.roles.at(1)?.id || args[1];
+
+        // Default Verified Role ID as requested by user
+        if (!verifiedRoleId) {
+            verifiedRoleId = '1359026651081736273';
+        }
+
+        // Try to find unverified role by name if not provided
+        if (!unverifiedRoleId) {
+            const unverifiedNames = ['unveryfied', 'unverified', 'Unverified', 'Unveryfied'];
+            const foundRole = message.guild.roles.cache.find(r => unverifiedNames.includes(r.name));
+            if (foundRole) {
+                unverifiedRoleId = foundRole.id;
+            }
+        }
 
         if (!verifiedRoleId || !unverifiedRoleId) {
-            return message.reply('❌ Usage: `,botsetup <@VerifiedRole> <@UnverifiedRole>`');
+            return message.reply(`❌ Could not determine roles. Usage: \`,botsetup <@VerifiedRole> <@UnverifiedRole>\` or ensure a role named "unveryfied" exists.`);
         }
 
         try {
@@ -77,11 +91,12 @@ export const command: Command = {
             db_manager.updateConfig(message.guild.id, 'mod_log_channel_id', logChannel.id);
             db_manager.updateConfig(message.guild.id, 'verified_role_id', verifiedRoleId);
             db_manager.updateConfig(message.guild.id, 'unverified_role_id', unverifiedRoleId);
+            db_manager.updateConfig(message.guild.id, 'verification_category_id', verifyCategory.id);
 
             // --- Help Desk Content ---
             const helpEmbed = new EmbedBuilder()
                 .setTitle('📚 Zedox Help Desk')
-                .setDescription('Complete list of available commands and their descriptions.')
+                .setDescription('Complete list of available commands and their descriptions.\n\n**🛡️ Verification System**\nMembers must click the button in <#' + verifyChannel.id + '> to gain access to the server.')
                 .setColor('#5865F2')
                 .setTimestamp();
 
