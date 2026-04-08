@@ -1,13 +1,15 @@
 import { PermissionsBitField } from 'discord.js';
 import { Command } from '../../handlers/CommandHandler.js';
 import { db_manager } from '../../database.js';
+import { sendModLog } from '../../utils/modLogs.js';
 
 export const command: Command = {
     name: 'deafen',
-    description: 'Deafen a member in a voice channel',
+    description: 'Deafen a member in the server',
     category: 'moderation',
     async execute(message, args, musicManager) {
-        const config = db_manager.getConfig(message.guild!.id);
+        if (!message.guild) return;
+        const config = db_manager.getConfig(message.guild.id);
         if (!config.features?.moderation) return;
         if (!message.member?.permissions.has(PermissionsBitField.Flags.DeafenMembers)) return message.reply('❌ Insufficient permissions.');
 
@@ -18,5 +20,10 @@ export const command: Command = {
 
         await target.voice.setDeaf(true);
         await message.reply(`✅ Deafened ${target.user.tag}.`);
+
+        await sendModLog(message.guild, 'User Deafened', `${target.user.tag} was deafened by ${message.author.tag}.`, '#FFFF00', [
+            { name: 'Target', value: `<@${target.id}>`, inline: true },
+            { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+        ]);
     }
 };

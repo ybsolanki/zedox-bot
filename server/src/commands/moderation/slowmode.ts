@@ -1,11 +1,14 @@
-import { PermissionsBitField, TextChannel } from 'discord.js';
+import { PermissionsBitField } from 'discord.js';
 import { Command } from '../../handlers/CommandHandler.js';
+import { db_manager } from '../../database.js';
+import { sendModLog } from '../../utils/modLogs.js';
 
 export const command: Command = {
     name: 'slowmode',
-    description: 'Set the slowmode for a channel',
+    description: 'Set slowmode for the current channel',
     category: 'moderation',
     async execute(message, args, musicManager) {
+        if (!message.guild) return;
         if (!message.member?.permissions.has(PermissionsBitField.Flags.ManageChannels)) return message.reply('❌ Insufficient permissions.');
 
         const seconds = parseInt(args[0]);
@@ -19,5 +22,11 @@ export const command: Command = {
         } else {
             await message.reply(`✅ Slowmode set to **${seconds}** seconds.`);
         }
+
+        await sendModLog(message.guild, 'Slowmode Updated', `Slowmode for ${message.channel} was set to **${seconds}** seconds by ${message.author.tag}.`, '#00FFFF', [
+            { name: 'Channel', value: `${message.channel}`, inline: true },
+            { name: 'Value', value: `${seconds}s`, inline: true },
+            { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+        ]);
     }
 };

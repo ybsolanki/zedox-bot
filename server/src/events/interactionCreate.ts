@@ -1,5 +1,6 @@
 import { Interaction, Client, EmbedBuilder, ChannelType, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { db_manager } from '../database.js';
+import { sendModLog } from '../utils/modLogs.js';
 
 export const event = {
     name: 'interactionCreate',
@@ -105,6 +106,10 @@ export const event = {
 
                 await interaction.reply({ content: '✅ **Verification Successful!** You now have full access to the server.', ephemeral: true });
                 console.log(`[VERIFY] ${member.user.tag} successfully verified.`);
+
+                await sendModLog(guild, 'Member Verified', `**${member.user.tag}** completed verification.`, '#00FFFF', [
+                    { name: 'User', value: `<@${member.id}>`, inline: true }
+                ]);
             } catch (error) {
                 console.error('[VERIFY] Error during verification:', error);
                 await interaction.reply({ content: '❌ Failed to update your roles. My top role might be below the Verified/Unverified roles.', ephemeral: true });

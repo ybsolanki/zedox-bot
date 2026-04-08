@@ -1,10 +1,16 @@
 import { GuildMember, Client, PermissionsBitField } from 'discord.js';
 import { db_manager } from '../database.js';
+import { sendModLog } from '../utils/modLogs.js';
 
 export const event = {
     name: 'guildMemberAdd',
     async execute(member: GuildMember, client: Client) {
         console.log(`[VERIFY] Member joined: ${member.user.tag} (${member.id}) in ${member.guild.name}`);
+
+        await sendModLog(member.guild, 'Member Joined', `**${member.user.tag}** joined the server.`, '#00FF00', [
+            { name: 'User', value: `<@${member.id}>`, inline: true },
+            { name: 'Member Count', value: `${member.guild.memberCount}`, inline: true }
+        ]);
 
         const config = db_manager.getConfig(member.guild.id);
         console.log(`[VERIFY] Current config for ${member.guild.name}:`, JSON.stringify(config));
